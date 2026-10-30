@@ -1,0 +1,21 @@
+# Dependencies (Bade folders, inko GitHub par nahi bhejna)
+node_modules/
+__pycache__/
+*.pyc
+
+# Environment Variables (Secrets/Passwords)
+.env
+.env.local
+
+# IDE aur OS files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Virtual Environments
+venv/
+env/
