@@ -2,36 +2,35 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, ScrollView, StatusBar, ActivityIndicator, TextInput, TouchableOpacity } from 'react-native';
 
-// YAHAN APNA LAPTOP KA IP ADDRESS DALNA (Example: '192.168.29.15')
+// YAHAN APNA LAPTOP KA IP ADDRESS DALNA
 const API_IP = '192.168.56.1'; 
 
-export default function HomeScreen() {
-  type Transaction = {
-    id: string | number;
-    type: string;
-    name: string;
-    meta: string;
-    amount: number;
-  };
+type Transaction = {
+  id: string | number;
+  name: string;
+  meta: string;
+  amount: number;
+  type: 'credit' | 'debit';
+};
 
+type AiResult = {
+  extracted_amount?: number | string;
+  predicted_category?: string;
+  transaction_type?: string;
+  error?: string;
+};
+
+export default function HomeScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   
-
-  // AI Parser ke liye types
-  type AIResult = {
-    extracted_amount?: string;
-    predicted_category?: string;
-    transaction_type?: string;
-    error?: string;
-  } | null;
-
   const [smsInput, setSmsInput] = useState('');
-  const [aiResult, setAiResult] = useState<AIResult>(null);
+  const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [parsing, setParsing] = useState(false);
 
-  // Backend se Transactions lana
-  useEffect(() => {
+  // Backend se data lane ka function
+  const fetchTransactions = () => {
+    setLoading(true);
     fetch(`http://${API_IP}:5000/api/transactions`)
       .then(response => response.json())
       .then(data => {
@@ -42,9 +41,13 @@ export default function HomeScreen() {
         console.error('Error:', error);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchTransactions();
   }, []);
 
-  // AI se SMS Parse karne ka function
+  // AI Parse aur Auto-Refresh function
   const handleParseSMS = async () => {
     if (!smsInput.trim()) return;
     setParsing(true);
@@ -54,6 +57,13 @@ export default function HomeScreen() {
       const response = await fetch(`http://${API_IP}:5000/api/parse-sms?sms=${encodeURIComponent(smsInput)}`);
       const data = await response.json();
       setAiResult(data);
+      
+      // MAGIC: Parse hone ke baad list ko refresh karo taaki naya item dikh jaye
+      setTimeout(() => {
+        fetchTransactions(); 
+        setSmsInput(''); // Input box khaali kar do
+      }, 1000);
+
     } catch (error) {
       console.error('AI Error:', error);
       setAiResult({ error: "AI se connect nahi ho paya" });
@@ -62,7 +72,6 @@ export default function HomeScreen() {
     }
   };
 
-  // Dummy Analytics Data (Baad mein yeh bhi backend se aayega)
   const analyticsData = [
     { category: 'Food & Dining', amount: 4500, color: '#ef4444', percentage: 45 },
     { category: 'Shopping', amount: 3499, color: '#f59e0b', percentage: 35 },
@@ -75,7 +84,6 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" />
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>
             <View style={styles.logoBox}><Text style={styles.logoText}>H</Text></View>
@@ -83,26 +91,24 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Balance Card */}
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Total Net Worth</Text>
           <Text style={styles.balanceAmount}>₹4,52,380</Text>
           <Text style={styles.balanceChange}>▲ +₹18,400 this month</Text>
         </View>
 
-        {/* 🧠 AI SMS PARSER BOX */}
         <View style={styles.aiBox}>
-          <Text style={styles.aiTitle}>🧠 AI SMS Parser</Text>
+          <Text style={styles.aiTitle}>🧠 AI SMS Parser (Auto-Save)</Text>
           <TextInput
             style={styles.input}
-            placeholder="Paste Bank SMS here... (e.g., Debited Rs 500 for Swiggy)"
+            placeholder="Paste Bank SMS here..."
             placeholderTextColor="#94a3b8"
             value={smsInput}
             onChangeText={setSmsInput}
             multiline
           />
           <TouchableOpacity style={styles.parseButton} onPress={handleParseSMS} disabled={parsing}>
-            <Text style={styles.parseButtonText}>{parsing ? 'Parsing...' : 'Parse with AI'}</Text>
+            <Text style={styles.parseButtonText}>{parsing ? 'Processing...' : 'Parse & Save with AI'}</Text>
           </TouchableOpacity>
 
           {aiResult && !aiResult.error && (
@@ -115,7 +121,6 @@ export default function HomeScreen() {
           {aiResult?.error && <Text style={styles.errorText}>{aiResult.error}</Text>}
         </View>
 
-        {/* 📊 NEW: Monthly Analytics Section */}
         <View style={styles.analyticsCard}>
           <Text style={styles.sectionTitle}>Monthly Expense Breakdown</Text>
           {analyticsData.map((item, index) => (
@@ -133,8 +138,7 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* Transactions Header */}
-        <Text style={styles.sectionTitle}>Recent Transactions</Text>
+        <Text style={styles.sectionTitle}>Recent Transactions (Live DB)</Text>
 
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -144,7 +148,7 @@ export default function HomeScreen() {
           transactions.map((tx) => (
             <View key={tx.id} style={styles.txItem}>
               <View style={[styles.txIcon, { backgroundColor: tx.type === 'credit' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)' }]}>
-                <Text style={styles.txEmoji}>{tx.type === 'credit' ? '💰' : '🛒'}</Text>
+                <Text style={styles.txEmoji}>{tx.type === 'credit' ? '' : '🛒'}</Text>
               </View>
               <View style={styles.txInfo}>
                 <Text style={styles.txName}>{tx.name}</Text>
@@ -170,14 +174,10 @@ const styles = StyleSheet.create({
   logoText: { color: 'white', fontSize: 18, fontWeight: '800' },
   brandName: { color: 'white', fontSize: 18, fontWeight: '800' },
   brandHighlight: { color: '#818cf8' },
-  
-  // Balance Card Styles
   balanceCard: { backgroundColor: '#1e1b4b', padding: 24, borderRadius: 24, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(99, 102, 241, 0.3)' },
   balanceLabel: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
   balanceAmount: { color: 'white', fontSize: 34, fontWeight: '800', letterSpacing: -1, marginBottom: 6 },
   balanceChange: { color: '#10b981', fontSize: 13 },
-
-  // AI Box Styles
   aiBox: { backgroundColor: '#1e293b', padding: 16, borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: '#6366f1' },
   aiTitle: { color: '#818cf8', fontSize: 16, fontWeight: '700', marginBottom: 12 },
   input: { backgroundColor: '#0f172a', color: 'white', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#334155', minHeight: 60, textAlignVertical: 'top', fontSize: 14 },
@@ -187,8 +187,6 @@ const styles = StyleSheet.create({
   resultText: { color: '#cbd5e1', fontSize: 14, marginBottom: 6 },
   highlight: { color: '#10b981', fontWeight: '700' },
   errorText: { color: '#ef4444', marginTop: 12, textAlign: 'center' },
-
-  // Analytics Styles (NEW)
   analyticsCard: { backgroundColor: '#1e293b', padding: 16, borderRadius: 16, marginBottom: 24 },
   analyticsRow: { marginBottom: 16 },
   analyticsInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
@@ -198,8 +196,6 @@ const styles = StyleSheet.create({
   progressBarBg: { height: 8, backgroundColor: '#0f172a', borderRadius: 4, overflow: 'hidden' },
   progressBarFill: { height: 8, borderRadius: 4 },
   analyticsPercent: { color: '#94a3b8', fontSize: 12, textAlign: 'right', marginTop: 4 },
-
-  // Transactions Styles
   sectionTitle: { color: '#94a3b8', fontSize: 14, fontWeight: '700', marginBottom: 12 },
   loadingContainer: { padding: 20, alignItems: 'center' },
   txItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#334155' },
