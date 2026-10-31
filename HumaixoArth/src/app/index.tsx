@@ -1,83 +1,66 @@
 // src/app/index.tsx
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, ScrollView, StatusBar, ActivityIndicator, TextInput, TouchableOpacity } from 'react-native';
-
-// YAHAN APNA LAPTOP KA IP ADDRESS DALNA
-const API_IP = '192.168.56.1'; 
-
-type Transaction = {
-  id: string | number;
-  name: string;
-  meta: string;
-  amount: number;
-  type: 'credit' | 'debit';
-};
-
-type AiResult = {
-  extracted_amount?: number | string;
-  predicted_category?: string;
-  transaction_type?: string;
-  error?: string;
-};
+import { StyleSheet, Text, View, SafeAreaView, ScrollView, StatusBar, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 
 export default function HomeScreen() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-  
   const [smsInput, setSmsInput] = useState('');
-  const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [parsing, setParsing] = useState(false);
 
-  // Backend se data lane ka function
-  const fetchTransactions = () => {
-    setLoading(true);
-    fetch(`http://${API_IP}:5000/api/transactions`)
-      .then(response => response.json())
-      .then(data => {
-        setTransactions(data);
-        setLoading(false);
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        setLoading(false);
-      });
+  useEffect(() => { fetchTransactions(); }, []);
+
+  const fetchTransactions = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/transactions');
+      const data = await response.json();
+      setTransactions(data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      setLoading(false);
+    }
   };
 
-  useEffect(() => {
-    fetchTransactions();
-  }, []);
-
-  // AI Parse aur Auto-Refresh function
   const handleParseSMS = async () => {
-    if (!smsInput.trim()) return;
+    if (!smsInput.trim()) {
+      Alert.alert('Error', 'Please paste a bank SMS first');
+      return;
+    }
+
     setParsing(true);
-    setAiResult(null);
-
     try {
-      const response = await fetch(`http://${API_IP}:5000/api/parse-sms?sms=${encodeURIComponent(smsInput)}`);
-      const data = await response.json();
-      setAiResult(data);
-      
-      // MAGIC: Parse hone ke baad list ko refresh karo taaki naya item dikh jaye
-      setTimeout(() => {
-        fetchTransactions(); 
-        setSmsInput(''); // Input box khaali kar do
-      }, 1000);
+      const response = await fetch('http://localhost:5000/api/parse-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sms: smsInput })
+      });
 
+      const result = await response.json();
+
+      if (response.ok) {
+        const newTransaction = {
+          id: Date.now(),
+          name: result.data.merchant,
+          meta: `${result.data.category} • AI Parsed • Confidence: ${(result.data.confidence * 100).toFixed(0)}%`,
+          amount: result.data.type === 'credit' ? result.data.amount : -result.data.amount,
+          type: result.data.type,
+          category: result.data.category
+        };
+
+        setTransactions([newTransaction, ...transactions]);
+        setSmsInput('');
+        Alert.alert('Success', `Parsed: ₹${result.data.amount} - ${result.data.merchant} (${result.data.category})`);
+      } else {
+        Alert.alert('Error', result.error || 'Failed to parse SMS');
+      }
     } catch (error) {
-      console.error('AI Error:', error);
-      setAiResult({ error: "AI se connect nahi ho paya" });
+      console.error('Error parsing SMS:', error);
+      Alert.alert('Error', 'Failed to connect to server');
     } finally {
       setParsing(false);
     }
   };
-
-  const analyticsData = [
-    { category: 'Food & Dining', amount: 4500, color: '#ef4444', percentage: 45 },
-    { category: 'Shopping', amount: 3499, color: '#f59e0b', percentage: 35 },
-    { category: 'Transport', amount: 1200, color: '#3b82f6', percentage: 12 },
-    { category: 'Bills & Others', amount: 800, color: '#8b5cf6', percentage: 8 },
-  ];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -89,6 +72,7 @@ export default function HomeScreen() {
             <View style={styles.logoBox}><Text style={styles.logoText}>H</Text></View>
             <Text style={styles.brandName}>Humaixo <Text style={styles.brandHighlight}>Arth</Text></Text>
           </View>
+          <View style={styles.profileBox}><Text style={styles.profileText}>HS</Text></View>
         </View>
 
         <View style={styles.balanceCard}>
@@ -97,69 +81,66 @@ export default function HomeScreen() {
           <Text style={styles.balanceChange}>▲ +₹18,400 this month</Text>
         </View>
 
-        <View style={styles.aiBox}>
-          <Text style={styles.aiTitle}>🧠 AI SMS Parser (Auto-Save)</Text>
+        {/* AI SMS Parser Section */}
+        <View style={styles.parserCard}>
+          <Text style={styles.parserTitle}>🤖 AI SMS Parser</Text>
+          <Text style={styles.parserSubtitle}>Paste your bank SMS below</Text>
+          
           <TextInput
-            style={styles.input}
-            placeholder="Paste Bank SMS here..."
-            placeholderTextColor="#94a3b8"
+            style={styles.smsInput}
+            placeholder="e.g., INR 450 debited from A/c XXXX1234 at SWIGGY..."
+            placeholderTextColor="#64748b"
+            multiline
+            numberOfLines={3}
             value={smsInput}
             onChangeText={setSmsInput}
-            multiline
+            editable={!parsing}
           />
-          <TouchableOpacity style={styles.parseButton} onPress={handleParseSMS} disabled={parsing}>
-            <Text style={styles.parseButtonText}>{parsing ? 'Processing...' : 'Parse & Save with AI'}</Text>
+
+          <TouchableOpacity 
+            style={[styles.parseButton, parsing && styles.parseButtonDisabled]} 
+            onPress={handleParseSMS}
+            disabled={parsing}
+          >
+            {parsing ? <ActivityIndicator color="white" /> : <Text style={styles.parseButtonText}>Parse with AI</Text>}
           </TouchableOpacity>
-
-          {aiResult && !aiResult.error && (
-            <View style={styles.resultBox}>
-              <Text style={styles.resultText}>💰 Amount: <Text style={styles.highlight}>{aiResult.extracted_amount}</Text></Text>
-              <Text style={styles.resultText}>📂 Category: <Text style={styles.highlight}>{aiResult.predicted_category}</Text></Text>
-              <Text style={styles.resultText}>🔄 Type: <Text style={styles.highlight}>{aiResult.transaction_type}</Text></Text>
-            </View>
-          )}
-          {aiResult?.error && <Text style={styles.errorText}>{aiResult.error}</Text>}
         </View>
 
-        <View style={styles.analyticsCard}>
-          <Text style={styles.sectionTitle}>Monthly Expense Breakdown</Text>
-          {analyticsData.map((item, index) => (
-            <View key={index} style={styles.analyticsRow}>
-              <View style={styles.analyticsInfo}>
-                <View style={[styles.colorDot, { backgroundColor: item.color }]} />
-                <Text style={styles.analyticsName}>{item.category}</Text>
-                <Text style={styles.analyticsAmount}>₹{item.amount.toLocaleString('en-IN')}</Text>
-              </View>
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: `${item.percentage}%`, backgroundColor: item.color }]} />
-              </View>
-              <Text style={styles.analyticsPercent}>{item.percentage}%</Text>
-            </View>
-          ))}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Today Income</Text>
+            <Text style={[styles.statValue, styles.textGreen]}>+₹5,000</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Today Expense</Text>
+            <Text style={[styles.statValue, styles.textRed]}>-₹1,240</Text>
+          </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Recent Transactions (Live DB)</Text>
+        <Text style={styles.sectionTitle}>Recent Transactions</Text>
 
-        {loading ? (
+        {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#6366f1" />
+            <Text style={styles.loadingText}>Loading data from server...</Text>
           </View>
-        ) : (
-          transactions.map((tx) => (
-            <View key={tx.id} style={styles.txItem}>
-              <View style={[styles.txIcon, { backgroundColor: tx.type === 'credit' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)' }]}>
-                <Text style={styles.txEmoji}>{tx.type === 'credit' ? '' : '🛒'}</Text>
-              </View>
-              <View style={styles.txInfo}>
-                <Text style={styles.txName}>{tx.name}</Text>
-                <Text style={styles.txMeta}>{tx.meta}</Text>
-              </View>
-              <Text style={[styles.txAmount, tx.type === 'credit' ? styles.textGreen : styles.textRed]}>
-                {tx.type === 'credit' ? '+' : '-'}₹{Math.abs(tx.amount).toLocaleString('en-IN')}
-              </Text>
-            </View>
-          ))
         )}
+
+        {!loading && transactions.map((tx) => (
+          <View key={tx.id} style={styles.txItem}>
+            <View style={[styles.txIcon, { backgroundColor: tx.type === 'credit' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)' }]}>
+              <Text style={styles.txEmoji}>{tx.type === 'credit' ? '💰' : tx.category === 'Food' ? '🍔' : '🛒'}</Text>
+            </View>
+            <View style={styles.txInfo}>
+              <Text style={styles.txName}>{tx.name}</Text>
+              <Text style={styles.txMeta}>{tx.meta}</Text>
+            </View>
+            <Text style={[styles.txAmount, tx.type === 'credit' ? styles.textGreen : styles.textRed]}>
+              {tx.type === 'credit' ? '+' : '-'}₹{Math.abs(tx.amount).toLocaleString('en-IN')}
+            </Text>
+          </View>
+        ))}
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -168,36 +149,34 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
   scrollContainer: { padding: 20, paddingBottom: 40 },
-  header: { flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: 20 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 30 },
   logoContainer: { flexDirection: 'row', alignItems: 'center' },
   logoBox: { width: 36, height: 36, backgroundColor: '#6366f1', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   logoText: { color: 'white', fontSize: 18, fontWeight: '800' },
-  brandName: { color: 'white', fontSize: 18, fontWeight: '800' },
+  brandName: { color: 'white', fontSize: 18, fontWeight: '800', letterSpacing: -0.5 },
   brandHighlight: { color: '#818cf8' },
+  profileBox: { width: 36, height: 36, backgroundColor: '#1e293b', borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  profileText: { color: 'white', fontSize: 14, fontWeight: '700' },
   balanceCard: { backgroundColor: '#1e1b4b', padding: 24, borderRadius: 24, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(99, 102, 241, 0.3)' },
   balanceLabel: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
   balanceAmount: { color: 'white', fontSize: 34, fontWeight: '800', letterSpacing: -1, marginBottom: 6 },
   balanceChange: { color: '#10b981', fontSize: 13 },
-  aiBox: { backgroundColor: '#1e293b', padding: 16, borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: '#6366f1' },
-  aiTitle: { color: '#818cf8', fontSize: 16, fontWeight: '700', marginBottom: 12 },
-  input: { backgroundColor: '#0f172a', color: 'white', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#334155', minHeight: 60, textAlignVertical: 'top', fontSize: 14 },
-  parseButton: { backgroundColor: '#6366f1', padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 12 },
-  parseButtonText: { color: 'white', fontWeight: '700', fontSize: 16 },
-  resultBox: { marginTop: 16, padding: 12, backgroundColor: '#0f172a', borderRadius: 8, borderWidth: 1, borderColor: '#10b981' },
-  resultText: { color: '#cbd5e1', fontSize: 14, marginBottom: 6 },
-  highlight: { color: '#10b981', fontWeight: '700' },
-  errorText: { color: '#ef4444', marginTop: 12, textAlign: 'center' },
-  analyticsCard: { backgroundColor: '#1e293b', padding: 16, borderRadius: 16, marginBottom: 24 },
-  analyticsRow: { marginBottom: 16 },
-  analyticsInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  colorDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
-  analyticsName: { color: '#cbd5e1', fontSize: 14, flex: 1 },
-  analyticsAmount: { color: 'white', fontSize: 14, fontWeight: '700' },
-  progressBarBg: { height: 8, backgroundColor: '#0f172a', borderRadius: 4, overflow: 'hidden' },
-  progressBarFill: { height: 8, borderRadius: 4 },
-  analyticsPercent: { color: '#94a3b8', fontSize: 12, textAlign: 'right', marginTop: 4 },
-  sectionTitle: { color: '#94a3b8', fontSize: 14, fontWeight: '700', marginBottom: 12 },
+  parserCard: { backgroundColor: '#1e293b', padding: 20, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: '#334155' },
+  parserTitle: { color: 'white', fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  parserSubtitle: { color: '#94a3b8', fontSize: 12, marginBottom: 12 },
+  smsInput: { backgroundColor: '#0f172a', color: 'white', borderRadius: 12, padding: 12, fontSize: 13, minHeight: 80, textAlignVertical: 'top', marginBottom: 12, borderWidth: 1, borderColor: '#475569' },
+  parseButton: { backgroundColor: '#6366f1', padding: 14, borderRadius: 12, alignItems: 'center' },
+  parseButtonDisabled: { backgroundColor: '#475569' },
+  parseButtonText: { color: 'white', fontSize: 15, fontWeight: '700' },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  statCard: { backgroundColor: '#1e293b', padding: 16, borderRadius: 16, width: '48%' },
+  statLabel: { color: '#94a3b8', fontSize: 11, marginBottom: 8 },
+  statValue: { fontSize: 18, fontWeight: '700' },
+  textGreen: { color: '#10b981' },
+  textRed: { color: '#ef4444' },
+  sectionTitle: { color: '#94a3b8', fontSize: 14, fontWeight: '700', marginBottom: 12, marginTop: 10 },
   loadingContainer: { padding: 20, alignItems: 'center' },
+  loadingText: { color: '#94a3b8', marginTop: 10, fontSize: 12 },
   txItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#334155' },
   txIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   txEmoji: { fontSize: 18 },
@@ -205,6 +184,4 @@ const styles = StyleSheet.create({
   txName: { color: 'white', fontSize: 14, fontWeight: '600', marginBottom: 2 },
   txMeta: { color: '#94a3b8', fontSize: 11 },
   txAmount: { fontSize: 14, fontWeight: '700' },
-  textGreen: { color: '#10b981' },
-  textRed: { color: '#ef4444' },
 });

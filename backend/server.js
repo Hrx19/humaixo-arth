@@ -2,90 +2,80 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const sqlite3 = require('sqlite3').verbose();
+const axios = require('axios'); // AI service se baat karne ke liye
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const AI_SERVICE_URL = 'http://localhost:5001/parse-sms'; // AI Service ka address
 
-app.use(cors()); 
+// Middleware
+app.use(cors());
 app.use(express.json());
 
-// 1. SQLite Database Setup
-const db = new sqlite3.Database('./humaixo_arth.db', (err) => {
-    if (err) console.error('DB Error:', err.message);
-    else console.log('✅ SQLite Database se connect ho gaya!');
-});
-
-db.run(`CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    meta TEXT,
-    amount REAL,
-    type TEXT
-)`);
-
-// Dummy data (agar database khaali hai)
-db.get("SELECT count(*) as count FROM transactions", (err, row) => {
-    if (row.count === 0) {
-        const dummyData = [
-            ['Swiggy', 'Food • HDFC ••4521', -450, 'debit'],
-            ['Salary - TCS Ltd', 'Income • SBI ••8832', 75000, 'credit'],
-            ['Rahul Sharma', 'Transfer • UPI', -2000, 'debit'],
-            ['Amazon', 'Shopping • SBI CC', -3499, 'debit'],
-            ['Netflix', 'Subscription • Auto-debit', -649, 'debit']
-        ];
-        const stmt = db.prepare("INSERT INTO transactions (name, meta, amount, type) VALUES (?, ?, ?, ?)");
-        dummyData.forEach(tx => stmt.run(tx));
-        stmt.finalize();
-        console.log(' Dummy transactions database mein daal diye gaye.');
-    }
-});
-
-// 2. API: Transactions ko Database se padhna
-app.get('/api/transactions', (req, res) => {
-    db.all("SELECT * FROM transactions ORDER BY id DESC", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+// 1. Health Check
+app.get('/', (req, res) => {
+    res.json({ 
+        message: "Welcome to Humaixo Arth Backend! 🚀",
+        status: "Running Successfully",
+        ai_service: AI_SERVICE_URL
     });
 });
 
-// 3. API: AI SMS Parser + Auto Save to Database (MAGIC FEATURE)
-app.get('/api/parse-sms', async (req, res) => {
+// 2. Transactions Fetch Karne ka API
+app.get('/api/transactions', (req, res) => {
+    const transactions = [
+        { id: 1, name: "Swiggy", meta: "Food • HDFC ••4521", amount: -450, type: "debit", category: "Food" },
+        { id: 2, name: "Salary - TCS Ltd", meta: "Income • SBI ••8832", amount: 75000, type: "credit", category: "Income" },
+        { id: 3, name: "Rahul Sharma", meta: "Transfer • UPI", amount: -2000, type: "debit", category: "Transfer" },
+        { id: 4, name: "Amazon", meta: "Shopping • SBI CC", amount: -3499, type: "debit", category: "Shopping" }
+    ];
+    res.json(transactions);
+});
+
+// 3. 🆕 NEW: SMS Parse Karne ka API (AI Service ko call karega)
+app.post('/api/parse-sms', async (req, res) => {
     try {
-        const sms = req.query.sms;
-        // AI Service se data mango
-        const response = await fetch(`http://localhost:5001/parse-sms?sms=${encodeURIComponent(sms)}`);
-        const data = await response.json();
-
-        // AI se mila data ko Database ke format mein badlo
-        const amountStr = data.extracted_amount.replace('₹', '').replace(',', '');
-        let finalAmount = parseFloat(amountStr);
-        if (data.transaction_type === 'DEBIT') {
-            finalAmount = -finalAmount; // Debit ko negative banao
-        }
+        const { sms } = req.body;
         
-        const txName = data.predicted_category + " (via AI)";
-        const txMeta = "AI Parsed • " + data.transaction_type;
-        const txType = data.transaction_type.toLowerCase();
+        if (!sms) {
+            return res.status(400).json({ error: "SMS text is required" });
+        }
 
-        // Database mein save karo
-        db.run(`INSERT INTO transactions (name, meta, amount, type) VALUES (?, ?, ?, ?)`,
-            [txName, txMeta, finalAmount, txType], function(err) {
-                if (err) console.error("DB Save Error:", err);
-                else console.log(`✅ Naya transaction DB mein save ho gaya! ID: ${this.lastID}`);
-            }
-        );
+        console.log(`📨 Received SMS for parsing: ${sms.substring(0, 50)}...`);
 
-        res.json(data); // App ko response bhejo
+        // AI Service ko call karna
+        const aiResponse = await axios.post(AI_SERVICE_URL, { sms });
+        
+        console.log(`✅ AI Parsed:`, aiResponse.data);
+
+        // AI ka response frontend ko bhejna
+        res.json({
+            success: true,
+            data: aiResponse.data
+        });
+
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "AI Service se connect nahi ho paya" });
+        console.error('❌ Error calling AI Service:', error.message);
+        
+        if (error.code === 'ECONNREFUSED') {
+            return res.status(503).json({ 
+                error: "AI Service is not running",
+                details: "Please start the AI service on port 5001"
+            });
+        }
+
+        res.status(500).json({ 
+            error: "Failed to parse SMS",
+            details: error.message
+        });
     }
 });
 
 // Server Start
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Humaixo Arth Server is running on port ${PORT}`);
+app.listen(PORT, () => {
+    console.log(`✅ Humaixo Arth Backend is running on port ${PORT}`);
+    console.log(`🔗 API Base: http://localhost:${PORT}`);
+    console.log(`🤖 AI Service: ${AI_SERVICE_URL}`);
 });
