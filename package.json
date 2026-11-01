@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "axios": "^1.21.0"
+    "axios": "^1.21.0",
+    "react-native-chart-kit": "^7.0.4",
+    "react-native-svg": "^15.16.0"
   }
 }

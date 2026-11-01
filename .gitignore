@@ -1,5 +1,6 @@
 # Dependencies (Bade folders, inko GitHub par nahi bhejna)
 node_modules/
+backend/dist/
 __pycache__/
 *.pyc
 

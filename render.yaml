@@ -1,0 +1,68 @@
+services:
+  - type: web
+    name: humaixo-arth-ai-hrx19
+    runtime: python
+    plan: free
+    region: singapore
+    branch: master
+    rootDir: ai-service
+    buildCommand: pip install -r requirements.txt && python -m spacy download en_core_web_sm
+    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SPACY_MODEL
+        value: en_core_web_sm
+      - key: LOG_LEVEL
+        value: INFO
+      - key: FLASK_DEBUG
+        value: "false"
+      - key: AI_SERVICE_API_KEY
+        generateValue: true
+
+  - type: web
+    name: humaixo-arth-api-hrx19
+    runtime: node
+    plan: free
+    region: singapore
+    branch: master
+    rootDir: backend
+    buildCommand: npm ci --include=dev && npm run build && npm prune --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: MONGO_MAX_RETRIES
+        value: "10"
+      - key: CORS_ORIGINS
+        value: https://humaixo-arth-web-hrx19.onrender.com
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AI_SERVICE_URL
+        value: https://humaixo-arth-ai-hrx19.onrender.com/parse-sms
+      - key: AI_SERVICE_API_KEY
+        fromService:
+          type: web
+          name: humaixo-arth-ai-hrx19
+          envVarKey: AI_SERVICE_API_KEY
+
+  - type: web
+    name: humaixo-arth-web-hrx19
+    runtime: static
+    branch: master
+    rootDir: HumaixoArth
+    buildCommand: npm ci && npx expo export --platform web
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: EXPO_PUBLIC_API_URL
+        value: https://humaixo-arth-api-hrx19.onrender.com
