@@ -1,0 +1,154 @@
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useAuth } from '@/auth/auth-context';
+import { FinanceScreen } from '@/components/finance-screen';
+import { EmptyState, PrimaryButton, SurfaceCard } from '@/components/finance-ui';
+import { FinanceTheme } from '@/constants/finance-theme';
+import { useFinanceStore } from '@/store/finance-store';
+
+export default function ProfileScreen(): React.JSX.Element {
+  const router = useRouter();
+  const { status, token, user, signOut } = useAuth();
+  const clearFinance = useFinanceStore((state) => state.clear);
+  const analytics = useFinanceStore((state) => state.analytics);
+  const transactions = useFinanceStore((state) => state.transactions);
+  const isGuest = status !== 'authenticated' || !token;
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async (): Promise<void> => {
+    setSigningOut(true);
+    try {
+      clearFinance();
+      await signOut();
+      router.replace('/');
+    } catch (error) {
+      Alert.alert('Could not sign out', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
+  const savingsRate = analytics && analytics.totals.income > 0
+    ? Math.round(((analytics.totals.income - analytics.totals.expense) / analytics.totals.income) * 100)
+    : null;
+
+  return (
+    <FinanceScreen title="Profile" subtitle="Your account, linked finances and privacy controls.">
+      {isGuest ? (
+        <EmptyState title="Your finances stay private" description="Sign in to view your personal profile, statement imports and linked accounts." action={<PrimaryButton label="Login or create account" onPress={() => router.push('/login')} />} />
+      ) : (
+        <>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatar}><Text style={styles.avatarText}>{(user?.name?.trim()[0] ?? 'U').toUpperCase()}</Text></View>
+            <Text style={styles.userName}>{user?.name ?? 'Humaixo user'}</Text>
+            <Text style={styles.userEmail}>{user?.email ?? ''}</Text>
+          </View>
+
+          <View style={styles.metricsRow}>
+            <Metric value={String(analytics?.byCategory.reduce((sum, item) => sum + item.count, 0) ?? transactions.length)} label="Transactions" />
+            <Metric value={savingsRate === null ? '—' : `${savingsRate}%`} label="Savings rate" />
+            <Metric value={String(analytics?.accounts.length ?? 0)} label="Accounts" />
+          </View>
+
+          <Section title="Your money workspace">
+            <MenuItem icon="▣" title="Linked accounts" description="Opening balances and account totals" onPress={() => router.push('/accounts')} />
+            <MenuItem icon="⇧" title="Bank statements" description="Preview, import and review past CSV uploads" onPress={() => router.push('/statement-import')} />
+            <MenuItem icon="▤" title="Transaction ledger" description="Search payments, balances and references" onPress={() => router.push('/transactions')} />
+            <MenuItem icon="✦" title="Insights and trends" description="Monthly cash flow and category analysis" onPress={() => router.push('/insights')} />
+            <MenuItem icon="◷" title="Balance history" description="Look back at tracked monthly balances" onPress={() => router.push('/history')} />
+          </Section>
+
+          <Section title="Privacy and data">
+            <View style={styles.privacyRow}>
+              <View style={styles.privacyIcon}><Text style={styles.privacyIconText}>⌑</Text></View>
+              <View style={styles.privacyContent}>
+                <Text style={styles.privacyTitle}>Statement data protection</Text>
+              <Text style={styles.privacyText}>Account and transaction rows are scoped to your user. Parsed SMS is retained with its transaction and omitted from list responses; original CSV files are not retained after import.</Text>
+              </View>
+            </View>
+            <View style={styles.privacyRow}>
+              <View style={styles.privacyIcon}><Text style={styles.privacyIconText}>◈</Text></View>
+              <View style={styles.privacyContent}>
+                <Text style={styles.privacyTitle}>Session storage</Text>
+                <Text style={styles.privacyText}>Mobile sessions use secure device storage; web sessions use browser storage.</Text>
+              </View>
+            </View>
+          </Section>
+
+          <SurfaceCard style={styles.signOutCard}>
+            <Text style={styles.signOutTitle}>Sign out from this device</Text>
+            <Text style={styles.signOutDescription}>Your cloud ledger remains attached to your account. This removes the local session.</Text>
+            <TouchableOpacity onPress={() => void handleSignOut()} disabled={signingOut} style={styles.signOutButton} accessibilityRole="button">
+              {signingOut ? <ActivityIndicator color={FinanceTheme.colors.red} /> : <Text style={styles.signOutText}>Logout</Text>}
+            </TouchableOpacity>
+          </SurfaceCard>
+        </>
+      )}
+    </FinanceScreen>
+  );
+}
+
+function Section({ title, children }: React.PropsWithChildren<{ title: string }>): React.JSX.Element {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <SurfaceCard style={styles.sectionCard}>{children}</SurfaceCard>
+    </View>
+  );
+}
+
+function Metric({ value, label }: { value: string; label: string }): React.JSX.Element {
+  return (
+    <SurfaceCard style={styles.metricCard}>
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
+    </SurfaceCard>
+  );
+}
+
+function MenuItem({ icon, title, description, onPress }: { icon: string; title: string; description: string; onPress: () => void }): React.JSX.Element {
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.menuItem} accessibilityRole="button">
+      <View style={styles.menuIcon}><Text style={styles.menuIconText}>{icon}</Text></View>
+      <View style={styles.menuText}>
+        <Text style={styles.menuTitle}>{title}</Text>
+        <Text style={styles.menuDescription}>{description}</Text>
+      </View>
+      <Text style={styles.menuArrow}>›</Text>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  profileHeader: { alignItems: 'center', paddingVertical: 10 },
+  avatar: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: FinanceTheme.colors.primary, borderWidth: 3, borderColor: 'rgba(181,164,255,0.35)' },
+  avatarText: { color: '#ffffff', fontSize: 30, fontWeight: '900' },
+  userName: { color: FinanceTheme.colors.text, fontSize: 17, fontWeight: '800', marginTop: 11 },
+  userEmail: { color: FinanceTheme.colors.muted, fontSize: 10, marginTop: 4 },
+  metricsRow: { flexDirection: 'row', gap: 8 },
+  metricCard: { flex: 1, alignItems: 'center', padding: 12 },
+  metricValue: { color: FinanceTheme.colors.text, fontSize: 17, fontWeight: '900' },
+  metricLabel: { color: FinanceTheme.colors.subtle, fontSize: 8, marginTop: 4 },
+  section: { gap: 8 },
+  sectionTitle: { color: FinanceTheme.colors.muted, fontSize: 10, fontWeight: '800', paddingHorizontal: 2, letterSpacing: 0.3 },
+  sectionCard: { paddingHorizontal: 12, paddingVertical: 2 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderBottomColor: FinanceTheme.colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+  menuIcon: { width: 33, height: 33, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(128,92,255,0.15)' },
+  menuIconText: { color: FinanceTheme.colors.primarySoft, fontSize: 15, fontWeight: '800' },
+  menuText: { flex: 1 },
+  menuTitle: { color: FinanceTheme.colors.text, fontSize: 10, fontWeight: '700' },
+  menuDescription: { color: FinanceTheme.colors.subtle, fontSize: 8, marginTop: 3 },
+  menuArrow: { color: FinanceTheme.colors.subtle, fontSize: 18 },
+  privacyRow: { flexDirection: 'row', gap: 10, paddingVertical: 10, borderBottomColor: FinanceTheme.colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+  privacyIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(33,201,151,0.12)', alignItems: 'center', justifyContent: 'center' },
+  privacyIconText: { color: FinanceTheme.colors.green, fontSize: 14, fontWeight: '800' },
+  privacyContent: { flex: 1 },
+  privacyTitle: { color: FinanceTheme.colors.text, fontSize: 9, fontWeight: '700' },
+  privacyText: { color: FinanceTheme.colors.muted, fontSize: 8, lineHeight: 12, marginTop: 3 },
+  signOutCard: { gap: 8, borderColor: 'rgba(255,99,117,0.2)' },
+  signOutTitle: { color: FinanceTheme.colors.text, fontSize: 11, fontWeight: '800' },
+  signOutDescription: { color: FinanceTheme.colors.muted, fontSize: 9, lineHeight: 14 },
+  signOutButton: { height: 40, borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,99,117,0.36)', backgroundColor: 'rgba(255,99,117,0.07)', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  signOutText: { color: FinanceTheme.colors.red, fontSize: 10, fontWeight: '800' },
+});
