@@ -1,100 +1,68 @@
-# Humaixo Arth
+# 💰 Humaixo Arth - Smart Finance Ledger & AI Parser
 
-Humaixo Arth is a private finance ledger for tracking account balances, daily money in/out, payees, and historical balances. The project combines an Expo app, a TypeScript/Express API, MongoDB, and a Flask/spaCy SMS parser.
+<div align="center">
 
-## What is implemented
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![React Native](https://img.shields.io/badge/React_Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
 
-- Explore-first dashboard with clearly labeled sample figures for guests.
-- Email/password registration and login. Mobile tokens use Expo SecureStore; web uses browser localStorage.
-- Multiple tracked accounts with opening balance/date, type, provider, and optional last four digits.
-- Manual transaction entry and searchable/paginated transaction ledger.
-- Statement CSV preview, row validation, duplicate detection, import history, and transaction import. Raw CSV content is not saved after the API request; the file hash and import summary are retained.
-- Authenticated PDF statement extraction for digital bank PDFs, with account ownership checks and duplicate detection. PDFs are processed in memory and are not stored; scanned image-only PDFs are rejected.
-- Category and monthly cash-flow analytics, pie/bar/line charts, income/expense summaries, account net balance, and historical balance lookup.
-- Payee totals: money sent, money received, net flow, count, and transaction timeline.
-- SMS parser for manual paste and explicit one-tap clipboard read. It distinguishes the transaction amount from available balance and reports a confidence score.
-- Duplicate SMS prevention and hidden raw-SMS source records. Raw SMS is omitted from transaction APIs.
-- Structured API logging, input validation, JWT-protected finance routes, safe error responses, and database retry/shutdown handling.
+**A private, intelligent finance ledger for tracking account balances, daily transactions, and automated bank statement parsing.**
 
-## How the ledger calculates balances
+[Features](#-features) • [Tech Stack](#-tech-stack) • [How It Works](#-how-the-ledger-calculates-balances) • [Local Setup](#-local-setup)
 
-An account stores an opening balance and the date that amount was accurate. Each transaction stores its date, signed flow type, and optional balance-before/balance-after snapshots. If a bank CSV or SMS supplies a balance, that snapshot is authoritative; later activity is applied on top of the latest earlier snapshot. Without a snapshot, the ledger calculates from the opening balance and recorded transactions. Historical values are only as complete as the statements and transactions imported by the user.
+</div>
 
-The payee summary groups transaction records marked as person transfers. Merchant/recipient extraction is heuristic, so users should review imported rows before relying on those totals. Insights are descriptive summaries of recorded data, not financial advice or a credit score.
+---
 
-## Local setup
+## 🌟 Features
 
-Use a Node.js version supported by the installed Expo SDK. Expo SDK 58 targets Node 22.13.x; the workspace's current Node 25.1 runtime prints unsupported-engine warnings. Python 3.11 or 3.12 is a practical local choice for the spaCy model.
+- **🔐 Secure Authentication**: Email/password login with JWT. Mobile tokens use Expo SecureStore; web uses browser localStorage.
+- **📊 Explore-First Dashboard**: Clearly labeled sample figures for guests, transitioning to real-time data upon login.
+- **🏦 Multi-Account Tracking**: Manage multiple accounts with opening balance/date, type, provider, and optional last four digits.
+- **📝 Manual & Automated Transactions**: Manual entry with searchable/paginated ledger, plus automated imports.
+- **📄 Intelligent Statement Import**: 
+  - **CSV**: Row validation, duplicate detection, and import history. Raw CSV content is hashed and not saved.
+  - **PDF**: Authenticated extraction for digital bank PDFs (up to 5MB). Processed in memory; scanned/image-only PDFs are rejected.
+- **📈 Advanced Analytics**: Category and monthly cash-flow analytics, pie/bar/line charts, income/expense summaries, and historical balance lookup.
+- **👥 Payee Totals**: Money sent, received, net flow, count, and transaction timeline (heuristic merchant/recipient extraction).
+- **💬 Smart SMS Parser**: Manual paste or one-tap clipboard read. Distinguishes transaction amount from available balance with a confidence score. Raw SMS is hidden from finance APIs for privacy.
 
-### 1. MongoDB and backend
+---
 
-Create `backend/.env` from the template and fill in your private Atlas URI and a random JWT secret of at least 32 characters. Never commit `.env` files.
+## 🛠️ Tech Stack
 
-```powershell
-cd "C:\Humaixo Arth\backend"
+| Layer | Technology |
+| :--- | :--- |
+| **Frontend** | React Native, Expo SDK 58, TypeScript, NativeWind |
+| **Backend API** | Node.js, Express.js, TypeScript, JWT, Structured Logging |
+| **Database** | MongoDB Atlas (with retry/shutdown handling) |
+| **AI / Parser** | Python, Flask, spaCy (`en_core_web_sm`), Heuristic Patterns |
+| **Security** | Expo SecureStore, CORS, Helmet, Input Validation |
+
+---
+
+## 🧠 How the Ledger Calculates Balances
+
+> 💡 **Core Logic**: An account stores an opening balance and the date that amount was accurate. Each transaction stores its date, signed flow type, and optional balance-before/balance-after snapshots. 
+> - If a bank CSV or SMS supplies a balance, that snapshot is **authoritative**; later activity is applied on top of the latest earlier snapshot. 
+> - Without a snapshot, the ledger calculates from the opening balance and recorded transactions. 
+> - *Note: Historical values are only as complete as the statements and transactions imported by the user.*
+
+The payee summary groups transaction records marked as person transfers. Insights are descriptive summaries of recorded data, **not financial advice or a credit score**.
+
+---
+
+## 🚀 Local Setup
+
+*Prerequisites: Node.js 22.13.x (Expo SDK 58 target), Python 3.11 or 3.12.*
+
+### 1. MongoDB and Backend
+Create `backend/.env` from the template. Fill in your private Atlas URI and a random JWT secret (min 32 chars). **Never commit `.env` files.**
+
+```bash
+cd backend
 npm install
-Copy-Item .env.example .env
-npm run dev
-```
-
-For a production build, use `npm run build` then `npm start`. `/health` reports API and MongoDB status. Finance routes require `Authorization: Bearer <token>`.
-
-### 2. AI parser
-
-```powershell
-cd "C:\Humaixo Arth\ai-service"
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m spacy download en_core_web_sm
-Copy-Item .env.example .env
-python app.py
-```
-
-The parser listens on port `5001`; the backend calls `http://localhost:5001/parse-sms`. It does not log SMS content. If the spaCy model is unavailable, deterministic patterns remain available as a fallback.
-
-For production, set the same random 32+ character `AI_SERVICE_API_KEY` in both backend and AI service environment files. The API sends it in `X-Service-Key`; the AI service rejects calls without it.
-
-### 3. Expo frontend
-
-```powershell
-cd "C:\Humaixo Arth\HumaixoArth"
-npm install
-Copy-Item .env.example .env
-npx expo start --clear
-```
-
-Set `EXPO_PUBLIC_API_URL` for the device you use:
-
-- Web on the same computer: `http://localhost:5000`
-- Android emulator: `http://10.0.2.2:5000`
-- Physical phone in Expo LAN mode: the app infers the computer's LAN address from the Expo development host. Keep the backend port reachable and both devices on the same network. Set the explicit LAN IP if Expo is running in tunnel mode.
-
-See [the authentication setup guide](../docs/authentication-setup.md) for Google and GitHub OAuth credentials. Email/password auth works in Expo Go. Native Google/GitHub callbacks require a development build with the app scheme configured.
-
-## Importing statements
-
-Create an account first and set its opening balance/date to a known point. Pick the account in **Import statement**, preview the rows, review invalid/duplicate counts, then confirm import. Supported CSV columns include:
-
-- Date
-- Description, Narration, Particulars, or Remarks
-- Debit and Credit, or Amount plus Type/Direction
-- Optional Balance, Recipient/Payee, Reference/UTR, and Category
-
-Use a running balance column whenever the bank provides one. For older data without a running balance, make sure the account opening balance/date predates the first transaction you import.
-
-Digital PDF statements can be imported from **Import PDF** on the dashboard. Select the destination account and a PDF of 5 MB or less. The parser supports common Indian date, amount and credit/debit text patterns; extracted rows are heuristic and should be reviewed in the transaction ledger. Image-only/scanned PDFs are not supported. The authenticated endpoint is `POST /api/parse-statement` with multipart fields `accountId` and `file`.
-
-The authenticated analytics endpoints are `GET /api/analytics/summary`, `GET /api/analytics/category-breakdown`, and `GET /api/analytics/monthly-trend?months=12`. Transaction history is available at `GET /api/transactions` with `page` and `limit`; records can be removed with `DELETE /api/transactions/:id`.
-
-## SMS and platform boundaries
-
-The app never reads messages in the background. Expo Go does not provide a general bank-SMS inbox reader, so **Read copied SMS and parse** reads the clipboard only after the user taps it. The pasted message is sent to the configured backend, parsed, and retained as a private source field on the transaction; finance API responses do not return that raw field. A native Android SMS receiver would require a separately reviewed development build, Android-specific implementation, and explicit user permission.
-
-## Verification commands
-
-```powershell
-cd "C:\Humaixo Arth\backend"; npm run build
-cd "C:\Humaixo Arth\HumaixoArth"; npx tsc --noEmit; npm run lint
-cd "C:\Humaixo Arth\ai-service"; .\venv\Scripts\python.exe -m pytest -q
-```
+cp .env.example .env  # On Windows PowerShell: Copy-Item .env.example .env
+npm run dev           # For production: npm run build && npm start
