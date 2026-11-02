@@ -20,35 +20,56 @@ const INITIAL_STATE = {
   error: null as string | null,
 };
 
+let dashboardRequestId = 0;
+let activeDashboardRequest: { token: string; promise: Promise<void> } | null = null;
+let dashboardDataToken: string | null = null;
+
 export const useFinanceStore = create<FinanceState>((set) => ({
   ...INITIAL_STATE,
 
   async refreshDashboard(token: string): Promise<void> {
-    set({
-      accounts: [],
-      transactions: [],
-      analytics: null,
-      loading: true,
-      error: null,
-    });
+    if (activeDashboardRequest?.token === token) return activeDashboardRequest.promise;
 
-    try {
-      const [accounts, transactions, analytics] = await Promise.all([
-        FinanceService.getAccounts(token),
-        FinanceService.getTransactions(token, { page: 1, limit: 30 }),
-        FinanceService.getAnalytics(token, 12),
-      ]);
-      set({ accounts, transactions, analytics, error: null });
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Dashboard data could not be loaded.',
-      });
-    } finally {
-      set({ loading: false });
+    const requestId = ++dashboardRequestId;
+    if (dashboardDataToken !== token) {
+      dashboardDataToken = token;
+      set({ ...INITIAL_STATE, loading: true });
+    } else {
+      set({ loading: true, error: null });
     }
+
+    const promise = (async (): Promise<void> => {
+      try {
+        const [accounts, transactions, analytics] = await Promise.all([
+          FinanceService.getAccounts(token),
+          FinanceService.getTransactions(token, { page: 1, limit: 30 }),
+          FinanceService.getAnalytics(token, 12),
+        ]);
+        if (requestId === dashboardRequestId) {
+          set({ accounts, transactions, analytics, error: null });
+        }
+      } catch (error) {
+        if (requestId === dashboardRequestId) {
+          set({
+            error: error instanceof Error ? error.message : 'Dashboard data could not be loaded.',
+          });
+        }
+      } finally {
+        if (requestId === dashboardRequestId) {
+          set({ loading: false });
+          activeDashboardRequest = null;
+        }
+      }
+    })();
+
+    activeDashboardRequest = { token, promise };
+    return promise;
   },
 
   clear(): void {
+    dashboardRequestId += 1;
+    activeDashboardRequest = null;
+    dashboardDataToken = null;
     set(INITIAL_STATE);
   },
 }));

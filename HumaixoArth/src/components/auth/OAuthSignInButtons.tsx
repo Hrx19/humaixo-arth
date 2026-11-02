@@ -212,7 +212,6 @@ function ProviderButton({
   onError,
 }: ProviderButtonProps): React.JSX.Element {
   const [isPrompting, setIsPrompting] = useState(false);
-  const [isExchanging, setIsExchanging] = useState(false);
   const processedResponses = useRef<Set<string>>(new Set());
 
   const [request, response, promptAsync] = useAuthRequest(
@@ -259,7 +258,6 @@ function ProviderButton({
       return;
     }
 
-    setIsExchanging(true);
     onBusyChange(true);
 
     void onAuthenticate(provider, {
@@ -276,7 +274,6 @@ function ProviderButton({
         );
       })
       .finally(() => {
-        setIsExchanging(false);
         setIsPrompting(false);
         onBusyChange(false);
       });
@@ -291,7 +288,7 @@ function ProviderButton({
     response,
   ]);
 
-  const isWorking = isPrompting || isExchanging;
+  const isWorking = isPrompting;
   const label = provider === 'google' ? 'Google' : 'GitHub';
 
   const handlePress = async (): Promise<void> => {
@@ -361,7 +358,7 @@ export function OAuthSignInButtons({
   const googleReady = isNative
     ? googleNativeSetupError === null
     : googleWebClientId.length > 0;
-  const githubRedirectUri = useMemo(getGitHubRedirectUri, []);
+  const githubRedirectUri = useMemo(() => getGitHubRedirectUri(), []);
   const googleWebRedirectUri = useMemo(
     () => getWebRedirectUri('google'),
     [],

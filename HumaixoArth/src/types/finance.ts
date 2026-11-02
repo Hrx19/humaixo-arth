@@ -55,6 +55,15 @@ export type MonthlyTotal = IncomeExpense & {
   month: number;
 };
 
+export type BudgetSummary = {
+  amount: number | null;
+  month: number;
+  year: number;
+  spent: number;
+  progress: number;
+  status: 'safe' | 'warning' | 'exceeded' | 'not_set';
+};
+
 export type CategoryTotal = {
   category: string;
   amount: number;
@@ -68,6 +77,8 @@ export type FinanceAnalytics = {
   today: IncomeExpense;
   thisWeek: IncomeExpense;
   thisMonth: MonthlyTotal;
+  budgetStatus: BudgetSummary['status'];
+  budget: BudgetSummary;
   trackedBalance: number;
   accounts: Pick<FinanceAccount, 'id' | 'name' | 'institution' | 'type' | 'accountSuffix' | 'currency' | 'balance' | 'color'>[];
   period: { from: string; to: string };

@@ -15,6 +15,7 @@ import type {
 } from '@/services/auth-service';
 import { AuthService } from '@/services/auth-service';
 import { useAuthStore } from '@/store/authStore';
+import { useFinanceStore } from '@/store/finance-store';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: React.PropsWithChildren): React.JSX.E
 
       try {
         const session = await request;
+        useFinanceStore.getState().clear();
         await persistLogin(session.user, session.token);
       } catch (error) {
         const message = getErrorMessage(error);
@@ -115,6 +117,7 @@ export function AuthProvider({ children }: React.PropsWithChildren): React.JSX.E
   const continueAsGuest = useCallback(async (): Promise<void> => {
     setRequestError(null);
     try {
+      useFinanceStore.getState().clear();
       await clearToGuest();
     } catch (error) {
       const message = getErrorMessage(error);
@@ -127,6 +130,7 @@ export function AuthProvider({ children }: React.PropsWithChildren): React.JSX.E
     setRequestError(null);
 
     try {
+      useFinanceStore.getState().clear();
       await clearLogin();
     } catch (error) {
       const message = getErrorMessage(error);

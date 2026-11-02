@@ -7,22 +7,39 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#171525',
+    background: '#f5f4fa',
+    backgroundElement: '#ffffff',
+    backgroundSelected: '#eeeaf8',
+    textSecondary: '#625f70',
+    border: '#e2dfeb',
+    primary: '#6844df',
+    primarySoft: '#5536c5',
+    green: '#087e5d',
+    red: '#c5344d',
+    amber: '#986000',
+    blue: '#2267ad',
+    subtle: '#777386',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#f8fafc',
+    background: '#090910',
+    backgroundElement: '#151520',
+    backgroundSelected: '#1d1d2a',
+    textSecondary: '#a1a1b3',
+    border: '#2b2b3a',
+    primary: '#805cff',
+    primarySoft: '#b5a4ff',
+    green: '#21c997',
+    red: '#ff6375',
+    amber: '#f5b84b',
+    blue: '#58a6ff',
   },
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export type ThemeMode = keyof typeof Colors;
+export type ThemePalette = (typeof Colors)[ThemeMode];
 
 export const Fonts = Platform.select({
   ios: {

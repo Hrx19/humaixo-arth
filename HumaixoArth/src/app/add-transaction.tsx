@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/auth-context';
 import { FinanceScreen } from '@/components/finance-screen';
 import { PrimaryButton, SurfaceCard } from '@/components/finance-ui';
-import { FinanceTheme } from '@/constants/finance-theme';
+import { FinanceTheme, useFinanceColors } from '@/constants/finance-theme';
 import { FinanceService } from '@/services/finance-service';
 import { useFinanceStore } from '@/store/finance-store';
 import type { CreateTransactionInput, TransactionType } from '@/types/finance';
@@ -26,6 +26,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 export default function AddTransactionScreen(): React.JSX.Element {
   const router = useRouter();
+  const colors = useFinanceColors();
   const { status, token } = useAuth();
   const isGuest = status !== 'authenticated' || !token;
   const accounts = useFinanceStore((state) => state.accounts);
@@ -36,13 +37,15 @@ export default function AddTransactionScreen(): React.JSX.Element {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [merchant, setMerchant] = useState('');
   const [counterparty, setCounterparty] = useState('');
-  const [category, setCategory] = useState('Food');
+  const [category, setCategory] = useState('');
   const [accountId, setAccountId] = useState<string | undefined>();
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [balanceAfter, setBalanceAfter] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [amountError, setAmountError] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
 
   const handleSave = async (): Promise<void> => {
     if (isGuest || !token) {
@@ -51,10 +54,23 @@ export default function AddTransactionScreen(): React.JSX.Element {
     }
     const numericAmount = Number(amount);
     const numericBalance = balanceAfter.trim() ? Number(balanceAfter) : undefined;
+    let hasFieldErrors = false;
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError('Enter an amount greater than zero.');
+      setAmountError('Enter an amount greater than zero.');
+      hasFieldErrors = true;
+    } else {
+      setAmountError(null);
+    }
+    if (!category) {
+      setCategoryError('Choose a category for this transaction.');
+      hasFieldErrors = true;
+    } else {
+      setCategoryError(null);
+    }
+    if (hasFieldErrors) {
       return;
     }
+    setError(null);
     if (!merchant.trim()) {
       setError('Enter the merchant or transaction description.');
       return;
@@ -103,40 +119,53 @@ export default function AddTransactionScreen(): React.JSX.Element {
       ) : (
         <SurfaceCard style={styles.formCard}>
           <View style={styles.typeToggle}>
-            <TypeButton label="Money out" active={type === 'debit'} onPress={() => { setType('debit'); if (category === 'Income') setCategory('Food'); }} />
-            <TypeButton label="Money in" active={type === 'credit'} onPress={() => { setType('credit'); setCategory('Income'); }} />
+            <TypeButton label="Money out" active={type === 'debit'} onPress={() => { setType('debit'); if (category === 'Income') setCategory(''); }} />
+            <TypeButton label="Money in" active={type === 'credit'} onPress={() => { setType('credit'); setCategory('Income'); setCategoryError(null); }} />
           </View>
 
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Amount (₹)</Text>
             <TextInput
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={(value) => {
+                setAmount(value);
+                if (Number.isFinite(Number(value)) && Number(value) > 0) setAmountError(null);
+              }}
               placeholder="0.00"
-              placeholderTextColor={FinanceTheme.colors.subtle}
+              placeholderTextColor={colors.subtle}
               keyboardType="decimal-pad"
-              style={[styles.input, styles.amountInput]}
+              style={[
+                styles.input,
+                styles.amountInput,
+                { color: colors.text, borderColor: amountError ? colors.red : colors.border, backgroundColor: colors.background },
+              ]}
               accessibilityLabel="Transaction amount in rupees"
             />
+            {amountError ? <Text accessibilityRole="alert" style={[styles.fieldError, { color: colors.red }]}>{amountError}</Text> : null}
           </View>
           <Field label="Merchant or description" value={merchant} onChangeText={setMerchant} placeholder="e.g. Swiggy, salary, rent" />
           <Field label="Person involved (optional)" value={counterparty} onChangeText={setCounterparty} placeholder="e.g. Rahul Sharma" />
 
-          <Text style={styles.fieldLabel}>Category</Text>
-          <View style={styles.categoryGrid}>
+          <Text style={[styles.fieldLabel, { color: colors.muted }]}>Category</Text>
+          <View style={[styles.categoryGrid, categoryError ? { borderWidth: 1, borderColor: colors.red, borderRadius: 14, padding: 5 } : null]}>
             {CATEGORIES.map((value) => (
               <TouchableOpacity
                 key={value}
-                onPress={() => setCategory(value)}
-                style={[styles.categoryChoice, category === value && styles.categoryChoiceActive]}
+                onPress={() => { setCategory(value); setCategoryError(null); }}
+                style={[
+                  styles.categoryChoice,
+                  { borderColor: category === value ? colors.primary : colors.border, backgroundColor: colors.surfaceRaised },
+                  category === value && styles.categoryChoiceActive,
+                ]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: category === value }}
               >
-                <Text style={styles.categoryIcon}>{CATEGORY_ICONS[value]}</Text>
+                <Text style={[styles.categoryIcon, { color: colors.primarySoft }]}>{CATEGORY_ICONS[value]}</Text>
                 <Text style={[styles.categoryLabel, category === value && styles.typeButtonTextActive]}>{value}</Text>
               </TouchableOpacity>
             ))}
           </View>
+          {categoryError ? <Text accessibilityRole="alert" style={[styles.fieldError, { color: colors.red }]}>{categoryError}</Text> : null}
 
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Transaction date</Text>
@@ -222,6 +251,7 @@ const styles = StyleSheet.create({
   typeButtonText: { color: FinanceTheme.colors.muted, fontSize: 10, fontWeight: '700' },
   typeButtonTextActive: { color: FinanceTheme.colors.primarySoft },
   field: { gap: 6 },
+  fieldError: { fontSize: 12, marginTop: 1 },
   fieldLabel: { color: FinanceTheme.colors.muted, fontSize: 9, fontWeight: '700' },
   input: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: FinanceTheme.colors.border, backgroundColor: FinanceTheme.colors.background, paddingHorizontal: 11, color: FinanceTheme.colors.text, fontSize: 11 },
   amountInput: { minHeight: 64, fontSize: 30, fontWeight: '800', letterSpacing: 0.3 },

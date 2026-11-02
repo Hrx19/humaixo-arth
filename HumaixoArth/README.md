@@ -5,12 +5,14 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
 ![React Native](https://img.shields.io/badge/React_Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Express.js](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white)
 
-**A private, intelligent finance ledger for tracking account balances, daily transactions, and automated bank statement parsing.**
+**Ek AI-powered, full-stack finance management application jo aapke kharche ko banata hai simple, smart aur secure.**
 
-[Features](#-features) • [Tech Stack](#-tech-stack) • [How It Works](#-how-the-ledger-calculates-balances) • [Local Setup](#-local-setup)
+[Features](#-features) • [Tech Stack](#-tech-stack) • [Setup Guide](#-setup-guide) • [API Docs](#-api-endpoints) • [Author](#-author)
 
 </div>
 
@@ -18,51 +20,140 @@
 
 ## 🌟 Features
 
-- **🔐 Secure Authentication**: Email/password login with JWT. Mobile tokens use Expo SecureStore; web uses browser localStorage.
-- **📊 Explore-First Dashboard**: Clearly labeled sample figures for guests, transitioning to real-time data upon login.
-- **🏦 Multi-Account Tracking**: Manage multiple accounts with opening balance/date, type, provider, and optional last four digits.
-- **📝 Manual & Automated Transactions**: Manual entry with searchable/paginated ledger, plus automated imports.
-- **📄 Intelligent Statement Import**: 
-  - **CSV**: Row validation, duplicate detection, and import history. Raw CSV content is hashed and not saved.
-  - **PDF**: Authenticated extraction for digital bank PDFs (up to 5MB). Processed in memory; scanned/image-only PDFs are rejected.
-- **📈 Advanced Analytics**: Category and monthly cash-flow analytics, pie/bar/line charts, income/expense summaries, and historical balance lookup.
-- **👥 Payee Totals**: Money sent, received, net flow, count, and transaction timeline (heuristic merchant/recipient extraction).
-- **💬 Smart SMS Parser**: Manual paste or one-tap clipboard read. Distinguishes transaction amount from available balance with a confidence score. Raw SMS is hidden from finance APIs for privacy.
+### 🔐 Authentication & Security
+- ✅ Email/Password authentication with JWT
+- ✅ Google & GitHub OAuth integration
+- ✅ Expo SecureStore (mobile) & localStorage (web)
+- ✅ bcrypt password hashing & Rate limiting
+
+### 📊 Dashboard & Analytics
+- ✅ Explore-first dashboard with sample data for guests
+- ✅ Real-time Total Net Worth calculation
+- ✅ Category-wise spending breakdown (**Pie Chart**)
+- ✅ Monthly trends visualization (**Line Chart**)
+
+### 🏦 Account & Transaction Management
+- ✅ Multiple accounts support (Savings, Cash, etc.)
+- ✅ Manual transaction entry (Income/Expense)
+- ✅ Searchable & paginated transaction ledger
+- ✅ Payee/Recipient tracking & timeline view
+
+### 📄 Intelligent Statement Import
+- **CSV Import:** Row validation, duplicate detection, import history.
+- **PDF Import:** AI extraction for digital bank PDFs (HDFC, SBI, ICICI). Max 5MB, processed in-memory.
+
+### 💬 Smart SMS Parser
+- ✅ Manual SMS paste or one-tap clipboard read
+- ✅ Transaction amount vs balance detection with confidence score
+- ✅ Raw SMS privacy protection (hidden from APIs)
+
+### 🎨 UI/UX
+- ✅ PhonePe-style animated splash screen
+- ✅ Dark/Light theme support
+- ✅ Monthly budget limits with safe, warning, and exceeded dashboard states
+- ✅ Friendly root error boundary and field-level transaction validation
+- ✅ Responsive design (Web, Android, iOS)
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
+| Layer | Technologies |
 | :--- | :--- |
-| **Frontend** | React Native, Expo SDK 58, TypeScript, NativeWind |
-| **Backend API** | Node.js, Express.js, TypeScript, JWT, Structured Logging |
-| **Database** | MongoDB Atlas (with retry/shutdown handling) |
-| **AI / Parser** | Python, Flask, spaCy (`en_core_web_sm`), Heuristic Patterns |
-| **Security** | Expo SecureStore, CORS, Helmet, Input Validation |
+| **Frontend** | React Native, Expo SDK 58, TypeScript, NativeWind (Tailwind), Zustand |
+| **Backend API** | Node.js, Express.js, TypeScript, JWT, MongoDB (Mongoose) |
+| **AI Service** | Python, Flask, spaCy NLP, pdf-parse |
+| **Security** | Expo SecureStore, CORS, Helmet, bcrypt |
 
 ---
 
-## 🧠 How the Ledger Calculates Balances
+## 📁 Project Structure
 
-> 💡 **Core Logic**: An account stores an opening balance and the date that amount was accurate. Each transaction stores its date, signed flow type, and optional balance-before/balance-after snapshots. 
-> - If a bank CSV or SMS supplies a balance, that snapshot is **authoritative**; later activity is applied on top of the latest earlier snapshot. 
-> - Without a snapshot, the ledger calculates from the opening balance and recorded transactions. 
-> - *Note: Historical values are only as complete as the statements and transactions imported by the user.*
+```text
+humaixo-arth/
+├── HumaixoArth/          # Frontend (React Native + Expo)
+│   ├── src/app/          # Expo Router pages
+│   ├── src/components/   # Reusable UI
+│   └── src/store/        # Zustand state
+├── backend/              # Backend (Node.js + Express)
+│   ├── src/routes/       # API endpoints
+│   ├── src/models/       # MongoDB schemas
+│   └── src/middleware/   # Auth & Error handlers
+├── ai-service/           # Python AI Parser
+│   └── app.py            # Flask server
+└── docs/                 # Documentation
 
-The payee summary groups transaction records marked as person transfers. Insights are descriptive summaries of recorded data, **not financial advice or a credit score**.
+🧠 How the Ledger Calculates Balances
+💡 Core Logic: An account stores an opening balance and the date that amount was accurate.
+If a bank CSV/PDF/SMS provides a balance at a specific date, that balance is authoritative.
+Later transactions are applied on top of the latest balance snapshot.
+Without a snapshot, the ledger calculates from the opening balance + all recorded transactions.
 
----
-
-## 🚀 Local Setup
-
-*Prerequisites: Node.js 22.13.x (Expo SDK 58 target), Python 3.11 or 3.12.*
-
-### 1. MongoDB and Backend
-Create `backend/.env` from the template. Fill in your private Atlas URI and a random JWT secret (min 32 chars). **Never commit `.env` files.**
-
-```bash
+🚀 Setup Guide
+1. Backend Setup
+bash
 cd backend
 npm install
-cp .env.example .env  # On Windows PowerShell: Copy-Item .env.example .env
-npm run dev           # For production: npm run build && npm start
+# Create .env file with: MONGO_URI, JWT_SECRET, GOOGLE_CLIENT_ID, GITHUB_CLIENT_ID
+npm run dev
+2. AI Service Setup
+bash
+cd ai-service
+python -m venv venv
+# Activate venv (Windows: .\venv\Scripts\Activate.ps1)
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+python app.py
+3. Frontend Setup
+bash
+cd HumaixoArth
+npm install
+# Create .env file with: EXPO_PUBLIC_API_URL=http://localhost:5000
+npx expo start --clear
+
+🔧API Endpoints
+
+Method
+Endpoint
+Description
+POST
+/api/auth/register
+Register new user
+POST
+/api/auth/login
+Login (Email/Google/GitHub)
+GET
+/api/transactions
+Get paginated transactions
+POST
+/api/transactions
+Add new transaction
+GET
+/api/analytics/summary
+Get total income/expense/balance
+POST
+/api/parse-statement
+Upload & parse Bank PDF
+
+🔒 Security & Privacy
+Data Protection: Passwords hashed with bcrypt. JWT tokens stored securely.
+Privacy-First: Raw CSV/PDF content is never saved to the database. Only hashes and summaries are retained.
+SMS Privacy: The app never reads SMS in the background. Clipboard reading requires explicit user tap.
+
+🗺️ Future Roadmap
+OpenAI/Gemini integration for smart categorization
+Budget limits and overspending alerts
+Multi-currency support
+Export transaction history to CSV/Excel
+Recurring transactions & Bill reminders
+
+👨‍💻 Author
+<div align="center">
+
+Harish Singh
+📍 Dehradun, Uttarakhand, India
+🔗 GitHub: @Hrx19
+✉️ harshukbhai09@gmail.com
+Made with ❤️ and ☕ by Harish Singh
+If you find this project useful, please ⭐ star this repository!
+</div>

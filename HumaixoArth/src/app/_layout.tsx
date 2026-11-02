@@ -15,6 +15,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { FinanceTheme } from '@/constants/finance-theme';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import { useThemeStore } from '@/store/themeStore';
 
 void SplashScreen.preventAutoHideAsync().catch((error: unknown) => {
   console.error('Could not keep the native splash screen visible.', error);
@@ -22,10 +24,15 @@ void SplashScreen.preventAutoHideAsync().catch((error: unknown) => {
 
 export default function RootLayout(): React.JSX.Element {
   const [splashVisible, setSplashVisible] = useState(true);
+  const initializeTheme = useThemeStore((state) => state.initialize);
   const splashOpacity = useSharedValue(1);
   const splashStyle = useAnimatedStyle(() => ({ opacity: splashOpacity.value }));
 
   useEffect(() => {
+    void initializeTheme().catch((error: unknown) => {
+      console.error('Could not restore the saved app theme.', error);
+    });
+
     void SplashScreen.hideAsync().catch((error: unknown) => {
       console.error('Could not dismiss the native splash screen.', error);
     });
@@ -37,32 +44,34 @@ export default function RootLayout(): React.JSX.Element {
     }, 2_000);
 
     return () => clearTimeout(timer);
-  }, [splashOpacity]);
+  }, [initializeTheme, splashOpacity]);
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
-        {splashVisible ? (
-          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, splashStyle]}>
-            <LinearGradient
-              colors={['#241850', '#111329', '#090910']}
-              locations={[0, 0.58, 1]}
-              style={styles.splash}
-            >
-              <Animated.View entering={FadeInDown.duration(700).delay(120)} style={styles.brand}>
-                <View style={styles.logoMark}>
-                  <Text style={styles.logoText}>H</Text>
-                </View>
-                <Text style={styles.brandName}>Humaixo Arth</Text>
-                <Text style={styles.tagline}>Your money, clearly understood.</Text>
-              </Animated.View>
-              <Text style={styles.footer}>PRIVATE FINANCE · MADE SIMPLE</Text>
-            </LinearGradient>
-          </Animated.View>
-        ) : null}
-      </AuthProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+          {splashVisible ? (
+            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, splashStyle]}>
+              <LinearGradient
+                colors={['#241850', '#111329', '#090910']}
+                locations={[0, 0.58, 1]}
+                style={styles.splash}
+              >
+                <Animated.View entering={FadeInDown.duration(700).delay(120)} style={styles.brand}>
+                  <View style={styles.logoMark}>
+                    <Text style={styles.logoText}>H</Text>
+                  </View>
+                  <Text style={styles.brandName}>Humaixo Arth</Text>
+                  <Text style={styles.tagline}>Your money, clearly understood.</Text>
+                </Animated.View>
+                <Text style={styles.footer}>PRIVATE FINANCE · MADE SIMPLE</Text>
+              </LinearGradient>
+            </Animated.View>
+          ) : null}
+        </AuthProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -1,6 +1,7 @@
 import { apiUrl } from '@/config/api';
 import type {
   BalanceHistoryPoint,
+  BudgetSummary,
   CreateAccountInput,
   CreateTransactionInput,
   FinanceAccount,
@@ -25,7 +26,7 @@ export class FinanceServiceError extends Error {
 }
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
 };
 
@@ -174,6 +175,19 @@ export const FinanceService = {
 
   getAnalytics(token: string, months = 12): Promise<FinanceAnalytics> {
     return requestJson(withQuery('/api/transactions/analytics', { months }), token);
+  },
+
+  async getBudget(token: string): Promise<BudgetSummary> {
+    const response = await requestJson<{ success: true; data: BudgetSummary }>('/api/budget', token);
+    return response.data;
+  },
+
+  async setBudget(token: string, amount: number): Promise<BudgetSummary> {
+    const response = await requestJson<{ success: true; data: BudgetSummary }>('/api/budget', token, {
+      method: 'PUT',
+      body: { amount },
+    });
+    return response.data;
   },
 
   getPeople(token: string): Promise<PersonSummary[]> {

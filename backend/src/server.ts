@@ -15,6 +15,7 @@ import { aiRouter } from './routes/ai';
 import { statementRouter } from './routes/statements';
 import { analyticsRouter } from './routes/analytics';
 import { pdfParserRouter } from './routes/pdf-parser';
+import { budgetRouter } from './routes/budget';
 
 export function createApp(): Express {
   const app = express();
@@ -62,6 +63,7 @@ export function createApp(): Express {
   app.use('/api/accounts', accountRouter);
   app.use('/api/transactions', transactionRouter);
   app.use('/api/analytics', analyticsRouter);
+  app.use('/api/budget', budgetRouter);
   app.use('/api/parse-sms', aiRouter);
   app.use('/api/statements', statementRouter);
   app.use('/api/parse-statement', pdfParserRouter);

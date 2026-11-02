@@ -10,7 +10,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
-import { FinanceTheme, formatDate, formatINR, formatShortDate } from '@/constants/finance-theme';
+import { FinanceTheme, formatDate, formatINR, formatShortDate, useFinanceColors } from '@/constants/finance-theme';
 import type { FinanceTransaction } from '@/types/finance';
 import { Trash2 } from 'lucide-react-native';
 import { Typography } from '@/theme/typography';
@@ -21,8 +21,9 @@ type SurfaceCardProps = {
 };
 
 export function SurfaceCard({ children, style }: SurfaceCardProps): React.JSX.Element {
+  const colors = useFinanceColors();
   return (
-    <Animated.View entering={FadeInDown.duration(240)} style={[styles.card, style]}>
+    <Animated.View entering={FadeInDown.duration(240)} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, style]}>
       {children}
     </Animated.View>
   );
@@ -35,12 +36,13 @@ type SectionHeaderProps = {
 };
 
 export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderProps): React.JSX.Element {
+  const colors = useFinanceColors();
   return (
     <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
       {actionLabel && onAction ? (
         <TouchableOpacity onPress={onAction} accessibilityRole="button">
-          <Text style={styles.sectionAction}>{actionLabel}</Text>
+          <Text style={[styles.sectionAction, { color: colors.primarySoft }]}>{actionLabel}</Text>
         </TouchableOpacity>
       ) : null}
     </View>
@@ -101,16 +103,16 @@ type TransactionRowProps = {
 };
 
 function getTransactionIcon(transaction: FinanceTransaction): string {
-  if (transaction.type === 'credit') return '↙';
+  if (transaction.type === 'credit') return '\u2199';
   switch (transaction.category.toLowerCase()) {
-    case 'food': return '🍽';
-    case 'shopping': return '🛍';
+    case 'food': return '\u{1F37D}';
+    case 'shopping': return '\u{1F6CD}';
     case 'travel':
-    case 'fuel': return '🚕';
-    case 'transfer': return '↗';
-    case 'bills': return '▤';
-    case 'healthcare': return '✚';
-    default: return '₹';
+    case 'fuel': return '\u{1F695}';
+    case 'transfer': return '\u2197';
+    case 'bills': return '\u25A4';
+    case 'healthcare': return '\u269A';
+    default: return '\u20B9';
   }
 }
 
@@ -122,66 +124,81 @@ function TransactionRowComponent({
   onDelete,
 }: TransactionRowProps): React.JSX.Element {
   const isCredit = transaction.type === 'credit';
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={onPress ? 0.78 : 1}
-      style={styles.transactionRow}
-      accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={`${transaction.merchant}, ${isCredit ? 'received' : 'spent'} ${formatINR(transaction.amount)}`}
-    >
-      <View style={[styles.transactionIcon, isCredit ? styles.transactionIconCredit : styles.transactionIconDebit]}>
-        <Text style={[styles.transactionIconText, isCredit && styles.transactionIconTextCredit]}>
+  const colors = useFinanceColors();
+  const transactionSummary = (
+    <>
+      <View style={[
+        styles.transactionIcon,
+        isCredit ? styles.transactionIconCredit : styles.transactionIconDebit,
+        !isCredit && { backgroundColor: colors.surfaceRaised },
+      ]}>
+        <Text style={[styles.transactionIconText, { color: isCredit ? colors.green : colors.primarySoft }]}>
           {getTransactionIcon(transaction)}
         </Text>
       </View>
       <View style={styles.transactionInfo}>
-        <Text style={styles.transactionName} numberOfLines={1}>{transaction.counterparty ?? transaction.merchant}</Text>
-        <Text style={styles.transactionMeta} numberOfLines={1}>
-          {transaction.category} · {transaction.paymentMethod ?? accountName ?? formatShortDate(transaction.date)}
+        <Text style={[styles.transactionName, { color: colors.text }]} numberOfLines={1}>{transaction.counterparty ?? transaction.merchant}</Text>
+        <Text style={[styles.transactionMeta, { color: colors.muted }]} numberOfLines={1}>
+          {transaction.category} {'\u00b7'} {transaction.paymentMethod ?? accountName ?? formatShortDate(transaction.date)}
         </Text>
         {expanded ? (
           <View style={styles.transactionDetails}>
-            <Text style={styles.detailLine}>When: {formatDate(transaction.date)}</Text>
-            {accountName ? <Text style={styles.detailLine}>Account: {accountName}</Text> : null}
-            {transaction.paymentMethod ? <Text style={styles.detailLine}>Method: {transaction.paymentMethod}</Text> : null}
-            {transaction.referenceNumber ? <Text style={styles.detailLine}>Reference: {transaction.referenceNumber}</Text> : null}
-            {transaction.balanceBefore !== null ? <Text style={styles.detailLine}>Balance before: {formatINR(transaction.balanceBefore)}</Text> : null}
-            {transaction.balanceAfter !== null ? <Text style={styles.detailLine}>Balance after: {formatINR(transaction.balanceAfter)}</Text> : null}
-            {transaction.note ? <Text style={styles.detailLine}>Note: {transaction.note}</Text> : null}
-            <Text style={styles.detailLine}>Source: {transaction.source}</Text>
+            <Text style={[styles.detailLine, { color: colors.muted }]}>When: {formatDate(transaction.date)}</Text>
+            {accountName ? <Text style={[styles.detailLine, { color: colors.muted }]}>Account: {accountName}</Text> : null}
+            {transaction.paymentMethod ? <Text style={[styles.detailLine, { color: colors.muted }]}>Method: {transaction.paymentMethod}</Text> : null}
+            {transaction.referenceNumber ? <Text style={[styles.detailLine, { color: colors.muted }]}>Reference: {transaction.referenceNumber}</Text> : null}
+            {transaction.balanceBefore !== null ? <Text style={[styles.detailLine, { color: colors.muted }]}>Balance before: {formatINR(transaction.balanceBefore)}</Text> : null}
+            {transaction.balanceAfter !== null ? <Text style={[styles.detailLine, { color: colors.muted }]}>Balance after: {formatINR(transaction.balanceAfter)}</Text> : null}
+            {transaction.note ? <Text style={[styles.detailLine, { color: colors.muted }]}>Note: {transaction.note}</Text> : null}
+            <Text style={[styles.detailLine, { color: colors.muted }]}>Source: {transaction.source}</Text>
           </View>
         ) : null}
       </View>
-      <View style={styles.transactionTrailing}>
-        <Text style={[styles.transactionAmount, isCredit ? styles.amountCredit : styles.amountDebit]}>
-          {isCredit ? '+' : '−'}{formatINR(transaction.amount)}
-        </Text>
-        {onDelete ? (
-          <TouchableOpacity
-            onPress={onDelete}
-            style={styles.deleteButton}
-            accessibilityRole="button"
-            accessibilityLabel={`Delete ${transaction.merchant}`}
-          >
-            <Trash2 size={17} color={FinanceTheme.colors.red} />
-          </TouchableOpacity>
-        ) : null}
-      </View>
-    </TouchableOpacity>
+      <Text style={[styles.transactionAmount, { color: isCredit ? colors.green : colors.red }]}>
+        {isCredit ? '+' : '\u2212'}{formatINR(transaction.amount)}
+      </Text>
+    </>
+  );
+
+  return (
+    <View style={styles.transactionRow}>
+      {onPress ? (
+        <TouchableOpacity
+          onPress={onPress}
+          activeOpacity={0.78}
+          style={styles.transactionMain}
+          accessibilityRole="button"
+          accessibilityLabel={`${transaction.merchant}, ${isCredit ? 'received' : 'spent'} ${formatINR(transaction.amount)}`}
+        >
+          {transactionSummary}
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.transactionMain}>{transactionSummary}</View>
+      )}
+      {onDelete ? (
+        <TouchableOpacity
+          onPress={onDelete}
+          style={styles.deleteButton}
+          accessibilityRole="button"
+          accessibilityLabel={`Delete ${transaction.merchant}`}
+        >
+          <Trash2 size={17} color={FinanceTheme.colors.red} />
+        </TouchableOpacity>
+      ) : null}
+    </View>
   );
 }
-
 export const TransactionRow = memo(TransactionRowComponent);
 
 type EmptyStateProps = { title: string; description: string; action?: ReactNode };
 
 export function EmptyState({ title, description, action }: EmptyStateProps): React.JSX.Element {
+  const colors = useFinanceColors();
   return (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>✦</Text></View>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyDescription}>{description}</Text>
+    <View style={[styles.emptyState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>{'\u2726'}</Text></View>
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.emptyDescription, { color: colors.muted }]}>{description}</Text>
       {action ? <View style={styles.emptyAction}>{action}</View> : null}
     </View>
   );
@@ -227,6 +244,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.06)',
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  transactionMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 11 },
   transactionIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   transactionIconCredit: { backgroundColor: 'rgba(33,201,151,0.12)' },
   transactionIconDebit: { backgroundColor: 'rgba(128,92,255,0.14)' },
@@ -236,7 +254,6 @@ const styles = StyleSheet.create({
   transactionName: { color: FinanceTheme.colors.text, fontSize: Typography.size.body, fontWeight: '700' },
   transactionMeta: { color: FinanceTheme.colors.subtle, fontSize: Typography.size.caption, marginTop: 4 },
   transactionAmount: { fontSize: Typography.size.subtext, fontWeight: '800', marginLeft: 2 },
-  transactionTrailing: { alignItems: 'flex-end', gap: 7 },
   deleteButton: { minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' },
   amountCredit: { color: FinanceTheme.colors.green },
   amountDebit: { color: FinanceTheme.colors.red },

@@ -16,7 +16,7 @@ import { LineChart, PieChart } from 'react-native-chart-kit';
 import * as Clipboard from 'expo-clipboard';
 import { FinanceScreen } from '@/components/finance-screen';
 import { EmptyState, SectionHeader, SurfaceCard, TransactionRow, PrimaryButton } from '@/components/finance-ui';
-import { FinanceTheme, formatINR } from '@/constants/finance-theme';
+import { FinanceTheme, formatINR, useFinanceColors } from '@/constants/finance-theme';
 import { useAuth } from '@/auth/auth-context';
 import { FinanceService } from '@/services/finance-service';
 import { useFinanceStore } from '@/store/finance-store';
@@ -58,13 +58,14 @@ function isSuccessfulParse(
 
 export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
+  const colors = useFinanceColors();
   const { width: screenWidth } = useWindowDimensions();
   const isDesktopViewport = Platform.OS === 'web' && screenWidth >= 1024;
   const chartWidth = isDesktopViewport
     ? Math.min(720, Math.max(240, screenWidth - 320))
     : Math.min(680, Math.max(240, screenWidth - (screenWidth < 480 ? 76 : 96)));
   const { status, token, user } = useAuth();
-  const isGuest = status !== 'authenticated' || !token;
+  const isGuest = status === 'unauthenticated';
   const accounts = useFinanceStore((state) => state.accounts);
   const transactions = useFinanceStore((state) => state.transactions);
   const analytics = useFinanceStore((state) => state.analytics);
@@ -196,6 +197,45 @@ export default function HomeScreen(): React.JSX.Element {
   const currentMonth = analytics?.thisMonth;
   const greetingName = user?.name?.trim().split(/\s+/)[0] || 'there';
 
+  if (
+    status === 'loading' ||
+    (!isGuest && !analytics && !dashboardError)
+  ) {
+    return (
+      <FinanceScreen
+        title="Your finance overview"
+        subtitle="Loading your private financial data…"
+        activeTab="home"
+      >
+        <View accessibilityRole="progressbar" accessibilityLabel="Loading dashboard" style={styles.loadingDashboard}>
+          <View style={[styles.skeletonBalance, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <ActivityIndicator color={colors.primary} />
+            <View style={[styles.skeletonLine, styles.skeletonBalanceLine, { backgroundColor: colors.surfaceRaised }]} />
+            <View style={[styles.skeletonLine, styles.skeletonValueLine, { backgroundColor: colors.surfaceRaised }]} />
+            <View style={styles.skeletonMetrics}>
+              <View style={[styles.skeletonLine, styles.skeletonMetricLine, { backgroundColor: colors.surfaceRaised }]} />
+              <View style={[styles.skeletonLine, styles.skeletonMetricLine, { backgroundColor: colors.surfaceRaised }]} />
+            </View>
+          </View>
+          <View style={styles.statsGrid}>
+            <SurfaceCard style={styles.statCard}>
+              <View style={[styles.skeletonLine, styles.skeletonStatLine, { backgroundColor: colors.surfaceRaised }]} />
+              <View style={[styles.skeletonLine, styles.skeletonStatValue, { backgroundColor: colors.surfaceRaised }]} />
+            </SurfaceCard>
+            <SurfaceCard style={styles.statCard}>
+              <View style={[styles.skeletonLine, styles.skeletonStatLine, { backgroundColor: colors.surfaceRaised }]} />
+              <View style={[styles.skeletonLine, styles.skeletonStatValue, { backgroundColor: colors.surfaceRaised }]} />
+            </SurfaceCard>
+          </View>
+          <SurfaceCard style={styles.budgetCard}>
+            <View style={[styles.skeletonLine, styles.skeletonBudgetLine, { backgroundColor: colors.surfaceRaised }]} />
+            <View style={[styles.skeletonLine, styles.skeletonBudgetTrack, { backgroundColor: colors.surfaceRaised }]} />
+          </SurfaceCard>
+        </View>
+      </FinanceScreen>
+    );
+  }
+
   return (
     <FinanceScreen
       title={`Good ${getTimeGreeting()}, ${isGuest ? 'there' : greetingName}`}
@@ -252,6 +292,61 @@ export default function HomeScreen(): React.JSX.Element {
           </View>
         </View>
       </View>
+
+      {!isGuest && analytics?.budget ? (
+        <SurfaceCard style={[styles.budgetCard, { borderColor: colors.border }]}>
+          <View style={styles.budgetHeading}>
+            <View style={styles.budgetHeadingCopy}>
+              <Text style={[styles.budgetTitle, { color: colors.text }]}>Monthly spending budget</Text>
+              <Text style={[styles.budgetCaption, { color: colors.muted }]}>
+                {analytics.budget.amount === null
+                  ? 'Set a limit to keep your monthly spending on track.'
+                  : `${formatINR(analytics.budget.spent)} of ${formatINR(analytics.budget.amount)} spent`}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/settings')} accessibilityRole="button">
+              <Text style={[styles.budgetAction, { color: colors.primarySoft }]}>
+                {analytics.budget.amount === null ? 'Set budget' : 'Edit'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {analytics.budget.amount !== null ? (
+            <>
+              <View
+                accessibilityRole="progressbar"
+                accessibilityValue={{ min: 0, max: 100, now: Math.min(analytics.budget.progress * 100, 100) }}
+                style={[styles.budgetTrack, { backgroundColor: colors.surfaceRaised }]}
+              >
+                <View
+                  style={[
+                    styles.budgetProgress,
+                    {
+                      width: `${Math.min(analytics.budget.progress * 100, 100)}%`,
+                      backgroundColor: analytics.budget.status === 'exceeded'
+                        ? colors.red
+                        : analytics.budget.status === 'warning' ? colors.amber : colors.green,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[
+                styles.budgetStatus,
+                {
+                  color: analytics.budget.status === 'exceeded'
+                    ? colors.red
+                    : analytics.budget.status === 'warning' ? colors.amber : colors.green,
+                },
+              ]}>
+                {analytics.budget.status === 'exceeded'
+                  ? 'You have exceeded your monthly budget.'
+                  : analytics.budget.status === 'warning'
+                    ? 'You have used at least 80% of your monthly budget.'
+                    : 'You are within your monthly budget.'}
+              </Text>
+            </>
+          ) : null}
+        </SurfaceCard>
+      ) : null}
 
       {!isGuest && dashboardError ? (
         <SurfaceCard style={styles.errorCard}>
@@ -655,9 +750,29 @@ function InsightCard({
 }
 
 const styles = StyleSheet.create({
+  loadingDashboard: { width: '100%', gap: 16 },
+  skeletonBalance: { minHeight: 205, justifyContent: 'center', alignItems: 'center', gap: 18, padding: 20, borderRadius: 23, borderWidth: 1 },
+  skeletonLine: { borderRadius: 999 },
+  skeletonBalanceLine: { width: '42%', height: 10 },
+  skeletonValueLine: { width: '68%', height: 28 },
+  skeletonMetrics: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  skeletonMetricLine: { width: '38%', height: 12 },
+  skeletonStatLine: { width: '65%', height: 10, marginBottom: 15 },
+  skeletonStatValue: { width: '78%', height: 19 },
+  skeletonBudgetLine: { width: '58%', height: 13 },
+  skeletonBudgetTrack: { width: '100%', height: 9, marginTop: 7 },
   headerButton: { minWidth: 42, paddingHorizontal: 12, height: 36, borderRadius: 12, backgroundColor: FinanceTheme.colors.surfaceRaised, borderWidth: 1, borderColor: FinanceTheme.colors.border, alignItems: 'center', justifyContent: 'center' },
   headerButtonText: { color: FinanceTheme.colors.primarySoft, fontSize: 12, fontWeight: '800' },
   balanceCard: { padding: 20, borderRadius: 23, backgroundColor: '#21143d', borderWidth: 1, borderColor: 'rgba(139,108,255,0.34)', overflow: 'hidden' },
+  budgetCard: { gap: 12 },
+  budgetHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  budgetHeadingCopy: { flex: 1, gap: 4 },
+  budgetTitle: { fontSize: 15, fontWeight: '800' },
+  budgetCaption: { fontSize: 12, lineHeight: 18 },
+  budgetAction: { fontSize: 13, fontWeight: '800' },
+  budgetTrack: { height: 9, borderRadius: 999, overflow: 'hidden' },
+  budgetProgress: { height: '100%', borderRadius: 999 },
+  budgetStatus: { fontSize: 12, fontWeight: '700' },
   balanceTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   balanceLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   balanceLabel: { color: '#c3bbda', fontSize: 10, letterSpacing: 0.9, fontWeight: '800' },

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { Types } from 'mongoose';
 import { z } from 'zod';
 import { AccountModel } from '../../models/Account';
+import { BudgetModel } from '../../models/Budget';
 import { logger } from '../config/logger';
 import { getMonthlyBalanceHistory, getUserAccountBalances } from '../services/account-balances';
 import { verifyToken } from '../middleware/verifyToken';
@@ -65,6 +66,7 @@ type MonthlyCashFlowAggregate = {
   expense: number;
 };
 type MonthlySummary = { year: number; month: number; income: number; expense: number };
+type BudgetStatus = 'safe' | 'warning' | 'exceeded' | 'not_set';
 type PersonAggregate = {
   _id: string;
   name?: string;
@@ -149,6 +151,13 @@ function errorResponse(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function getBudgetStatus(amount: number | null, spent: number): BudgetStatus {
+  if (amount === null) return 'not_set';
+  if (spent >= amount) return 'exceeded';
+  if (spent >= amount * 0.8) return 'warning';
+  return 'safe';
+}
+
 transactionRouter.get('/analytics', async (request, response) => {
   const userId = request.auth?.userId;
   if (!userId) {
@@ -173,7 +182,7 @@ transactionRouter.get('/analytics', async (request, response) => {
     const userObjectId = getUserObjectId(userId);
     const match = { userId: userObjectId, date: { $gte: startDate, $lte: now } };
 
-    const [periodTotals, categoryRows, monthlyRows] = await Promise.all([
+    const [periodTotals, categoryRows, monthlyRows, monthlyBudget] = await Promise.all([
       TransactionModel.aggregate<CashFlowAggregate>([
         { $match: match },
         {
@@ -225,6 +234,11 @@ transactionRouter.get('/analytics', async (request, response) => {
         },
         { $sort: { '_id.year': 1, '_id.month': 1 } },
       ]),
+      BudgetModel.findOne({
+        userId: userObjectId,
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+      }).select('amount').lean(),
     ]);
 
     const monthlyByKey = new Map<string, MonthlySummary>();
@@ -252,6 +266,8 @@ transactionRouter.get('/analytics', async (request, response) => {
       income: 0,
       expense: 0,
     };
+    const budgetAmount = monthlyBudget?.amount ?? null;
+    const budgetStatus = getBudgetStatus(budgetAmount, currentMonth.expense);
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfWeek = new Date(startOfToday);
     startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
@@ -308,6 +324,13 @@ transactionRouter.get('/analytics', async (request, response) => {
       today: toIncomeExpense(todayRows),
       thisWeek: toIncomeExpense(weekRows),
       thisMonth: currentMonth,
+      budgetStatus,
+      budget: {
+        amount: budgetAmount,
+        spent: currentMonth.expense,
+        progress: budgetAmount === null ? 0 : Math.min(currentMonth.expense / budgetAmount, 1),
+        status: budgetStatus,
+      },
       trackedBalance: accountTotal,
       accounts: accountBalances.map(({ account, balance }) => ({
         id: account._id.toString(),

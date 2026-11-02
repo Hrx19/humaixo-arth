@@ -13,8 +13,9 @@ import {
 import { useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FinanceTheme } from '@/constants/finance-theme';
+import { FinanceTheme, useFinanceColors } from '@/constants/finance-theme';
 import { Typography } from '@/theme/typography';
+import { useThemeStore } from '@/store/themeStore';
 
 export type FinanceTab = 'home' | 'transactions' | 'people' | 'history' | 'insights';
 
@@ -44,13 +45,18 @@ export function FinanceScreen({
   contentStyle,
 }: FinanceScreenProps): React.JSX.Element {
   const router = useRouter();
+  const colors = useFinanceColors();
+  const themeMode = useThemeStore((state) => state.mode);
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= 1024;
   const horizontalPadding = width < 360 ? 14 : width < 768 ? 18 : isDesktop ? 30 : 24;
 
   const renderNavigation = (desktop: boolean): React.JSX.Element => (
-    <View style={desktop ? styles.sidebarNavigation : styles.bottomNav}>
-      {desktop ? <Text style={styles.sidebarSectionLabel}>WORKSPACE</Text> : null}
+    <View style={[
+      desktop ? styles.sidebarNavigation : styles.bottomNav,
+      !desktop && { backgroundColor: colors.surface, borderTopColor: colors.border },
+    ]}>
+      {desktop ? <Text style={[styles.sidebarSectionLabel, { color: colors.subtle }]}>WORKSPACE</Text> : null}
       {NAV_ITEMS.map((item) => {
         const active = item.key === activeTab;
         return (
@@ -67,11 +73,15 @@ export function FinanceScreen({
           >
             <Text style={[
               desktop ? styles.sidebarNavIcon : styles.navIcon,
+              { color: colors.subtle },
               active && styles.navIconActive,
+              active && { color: colors.primarySoft },
             ]}>{item.icon}</Text>
             <Text style={[
               desktop ? styles.sidebarNavLabel : styles.navLabel,
+              { color: colors.muted },
               active && styles.navLabelActive,
+              active && { color: colors.primarySoft },
             ]}>{item.label}</Text>
             {desktop && active ? <View style={styles.sidebarIndicator} /> : null}
             {!desktop && active ? <View style={styles.navIndicator} /> : null}
@@ -82,29 +92,29 @@ export function FinanceScreen({
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'right', 'bottom', 'left']}>
-      <StatusBar style="light" />
-      <View style={[styles.root, isDesktop && styles.desktopRoot]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'right', 'bottom', 'left']}>
+      <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
+      <View style={[styles.root, { backgroundColor: colors.background }, isDesktop && styles.desktopRoot]}>
         {isDesktop ? (
-          <View style={styles.sidebar}>
+          <View style={[styles.sidebar, { backgroundColor: colors.surface, borderRightColor: colors.border }]}>
             <View style={styles.brand}>
               <View style={styles.logoMark}><Text style={styles.logoText}>H</Text></View>
-              <Text style={styles.brandName}>Humaixo <Text style={styles.brandAccent}>Arth</Text></Text>
+              <Text style={[styles.brandName, { color: colors.text }]}>Humaixo <Text style={[styles.brandAccent, { color: colors.primarySoft }]}>Arth</Text></Text>
             </View>
             {renderNavigation(true)}
             <View style={styles.sidebarFooter}>
-              <Text style={styles.sidebarFooterTitle}>Your money, clearly understood.</Text>
-              <Text style={styles.sidebarFooterText}>Private finance tools for everyday decisions.</Text>
+              <Text style={[styles.sidebarFooterTitle, { color: colors.text }]}>Your money, clearly understood.</Text>
+              <Text style={[styles.sidebarFooterText, { color: colors.subtle }]}>Private finance tools for everyday decisions.</Text>
             </View>
           </View>
         ) : null}
 
-        <View style={styles.mainColumn}>
+        <View style={[styles.mainColumn, { backgroundColor: colors.background }]}>
           <View style={[styles.topBar, { paddingHorizontal: horizontalPadding }]}>
             {!isDesktop ? (
               <View style={styles.brand}>
                 <View style={styles.logoMark}><Text style={styles.logoText}>H</Text></View>
-                <Text style={styles.brandName}>Humaixo <Text style={styles.brandAccent}>Arth</Text></Text>
+                <Text style={[styles.brandName, { color: colors.text }]}>Humaixo <Text style={[styles.brandAccent, { color: colors.primarySoft }]}>Arth</Text></Text>
               </View>
             ) : <View style={styles.desktopTopSpacer} />}
             <View style={styles.topAction}>
@@ -115,7 +125,7 @@ export function FinanceScreen({
                   accessibilityRole="button"
                   accessibilityLabel="Open profile and settings"
                 >
-                  <Text style={styles.profileButtonText}>H</Text>
+                  <Text style={[styles.profileButtonText, { color: colors.primarySoft }]}>H</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -132,8 +142,8 @@ export function FinanceScreen({
           >
             <View style={[styles.content, contentStyle, isDesktop && styles.desktopContent]}>
               <View style={styles.pageHeading}>
-                <Text style={styles.pageTitle}>{title}</Text>
-                {subtitle ? <Text style={styles.pageSubtitle}>{subtitle}</Text> : null}
+                <Text style={[styles.pageTitle, { color: colors.text }]}>{title}</Text>
+                {subtitle ? <Text style={[styles.pageSubtitle, { color: colors.muted }]}>{subtitle}</Text> : null}
               </View>
               {children}
             </View>
@@ -222,7 +232,7 @@ const styles = StyleSheet.create({
   bottomNav: {
     width: '100%',
     minHeight: 65,
-    backgroundColor: '#101019',
+    backgroundColor: FinanceTheme.colors.surface,
     borderTopColor: FinanceTheme.colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
