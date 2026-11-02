@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { BarChart, LineChart, PieChart } from 'react-native-chart-kit';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/auth-context';
@@ -11,7 +11,6 @@ import { useFinanceStore } from '@/store/finance-store';
 import type { BalanceHistoryPoint, FinanceAnalytics, MerchantSummary } from '@/types/finance';
 import { BalanceTrendFallback, CashFlowFallback, CategoryBreakdownFallback } from '@/components/web-chart-fallbacks';
 
-const CHART_WIDTH = Math.max(250, Dimensions.get('window').width - 76);
 const CHART_COLORS = ['#8b6cff', '#22c997', '#f5b84b', '#58a6ff', '#ff6375', '#d879ff'];
 const GUEST_CATEGORIES = [
   { name: 'Food', amount: 8500, color: '#8b6cff', legendFontColor: '#a1a1b3', legendFontSize: 11 },
@@ -22,6 +21,11 @@ const GUEST_CATEGORIES = [
 
 export default function InsightsScreen(): React.JSX.Element {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const isDesktopViewport = Platform.OS === 'web' && screenWidth >= 1024;
+  const chartWidth = isDesktopViewport
+    ? Math.min(720, Math.max(240, screenWidth - 320))
+    : Math.min(680, Math.max(240, screenWidth - (screenWidth < 480 ? 76 : 96)));
   const { status, token } = useAuth();
   const isGuest = status !== 'authenticated' || !token;
   const storedAnalytics = useFinanceStore((state) => state.analytics);
@@ -132,7 +136,7 @@ export default function InsightsScreen(): React.JSX.Element {
             ) : (
               <PieChart
                 data={categoryData.map(({ amount, ...item }) => ({ ...item, population: amount }))}
-                width={CHART_WIDTH}
+                width={chartWidth}
                 height={190}
                 chartConfig={chartConfig}
                 accessor="population"
@@ -176,7 +180,7 @@ export default function InsightsScreen(): React.JSX.Element {
           ) : isGuest ? (
             <BarChart
               data={{ labels: ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'], datasets: [{ data: [62000, 58000, 71000, 63500, 69000, 75000] }, { data: [48000, 52000, 55000, 49000, 57600, 56600] }] }}
-              width={CHART_WIDTH}
+              width={chartWidth}
               height={205}
               chartConfig={chartConfig}
               yAxisLabel="₹"
@@ -193,7 +197,7 @@ export default function InsightsScreen(): React.JSX.Element {
                 labels: monthlyData.map((month) => new Date(month.year, month.month - 1, 1).toLocaleDateString('en-IN', { month: 'short' })),
                 datasets: [{ data: expense }, { data: income }],
               }}
-              width={CHART_WIDTH}
+              width={chartWidth}
               height={205}
               chartConfig={chartConfig}
               yAxisLabel="₹"
@@ -232,7 +236,7 @@ export default function InsightsScreen(): React.JSX.Element {
           ) : isGuest ? (
             <LineChart
               data={{ labels: ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'], datasets: [{ data: [335000, 350000, 375000, 395000, 420000, 452380] }] }}
-              width={CHART_WIDTH}
+              width={chartWidth}
               height={170}
               chartConfig={chartConfig}
               bezier
@@ -244,7 +248,7 @@ export default function InsightsScreen(): React.JSX.Element {
           ) : history.length > 0 ? (
             <LineChart
               data={{ labels: history.map((point) => new Date(point.date).toLocaleDateString('en-IN', { month: 'short' })), datasets: [{ data: history.map((point) => point.balance) }] }}
-              width={CHART_WIDTH}
+              width={chartWidth}
               height={170}
               chartConfig={chartConfig}
               bezier

@@ -2,6 +2,7 @@
   "expo": {
     "name": "HumaixoArth",
     "slug": "HumaixoArth",
+    "scheme": "humaixoarth",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,7 +16,8 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.humaixo.arth"
     },
     "android": {
       "adaptiveIcon": {
@@ -29,7 +31,8 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "@react-native-google-signin/google-signin"
     ]
   }
 }

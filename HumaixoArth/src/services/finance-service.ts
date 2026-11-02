@@ -25,7 +25,7 @@ export class FinanceServiceError extends Error {
 }
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PATCH';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
 };
 
@@ -112,6 +112,53 @@ export const FinanceService = {
 
   createTransaction(token: string, input: CreateTransactionInput): Promise<{ success: true; data: FinanceTransaction }> {
     return requestJson('/api/transactions', token, { method: 'POST', body: input });
+  },
+
+  deleteTransaction(token: string, transactionId: string): Promise<{ success: true; message: string }> {
+    return requestJson(`/api/transactions/${encodeURIComponent(transactionId)}`, token, { method: 'DELETE' });
+  },
+
+  async parsePdfStatement(
+    token: string,
+    accountId: string,
+    file: Blob,
+    fileName: string,
+  ): Promise<{ success: true; data: { importedCount: number; duplicateCount: number; account: string } }> {
+    const formData = new FormData();
+    formData.append('accountId', accountId);
+    formData.append('file', file, fileName);
+
+    let response: Response;
+    try {
+      response = await fetch(apiUrl('/api/parse-statement'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+    } catch {
+      throw new FinanceServiceError(
+        'Humaixo Arth could not reach the server. Check the API address and connection.',
+      );
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new FinanceServiceError('The server returned an unreadable response.', response.status);
+    }
+
+    if (!response.ok) {
+      const message = isRecord(payload) && typeof payload.error === 'string'
+        ? payload.error
+        : `Request failed (${response.status}).`;
+      throw new FinanceServiceError(message, response.status);
+    }
+
+    return payload as {
+      success: true;
+      data: { importedCount: number; duplicateCount: number; account: string };
+    };
   },
 
   parseSms(

@@ -1,17 +1,20 @@
 import React, { type ReactNode } from 'react';
 import {
-  SafeAreaView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { FinanceTheme } from '@/constants/finance-theme';
+import { Typography } from '@/theme/typography';
 
 export type FinanceTab = 'home' | 'transactions' | 'people' | 'history' | 'insights';
 
@@ -25,11 +28,11 @@ type FinanceScreenProps = {
 };
 
 const NAV_ITEMS: { key: FinanceTab; label: string; icon: string; route: Href }[] = [
-  { key: 'home', label: 'Home', icon: '⌂', route: '/' },
-  { key: 'transactions', label: 'Activity', icon: '▤', route: '/transactions' },
-  { key: 'people', label: 'People', icon: '♧', route: '/people' },
-  { key: 'history', label: 'History', icon: '◷', route: '/history' },
-  { key: 'insights', label: 'Insights', icon: '✦', route: '/insights' },
+  { key: 'home', label: 'Home', icon: '\u2302', route: '/' },
+  { key: 'transactions', label: 'Activity', icon: '\u25a4', route: '/transactions' },
+  { key: 'people', label: 'People', icon: '\u2659', route: '/people' },
+  { key: 'history', label: 'History', icon: '\u25f7', route: '/history' },
+  { key: 'insights', label: 'Insights', icon: '\u2726', route: '/insights' },
 ];
 
 export function FinanceScreen({
@@ -41,61 +44,102 @@ export function FinanceScreen({
   contentStyle,
 }: FinanceScreenProps): React.JSX.Element {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 1024;
+  const horizontalPadding = width < 360 ? 14 : width < 768 ? 18 : isDesktop ? 30 : 24;
+
+  const renderNavigation = (desktop: boolean): React.JSX.Element => (
+    <View style={desktop ? styles.sidebarNavigation : styles.bottomNav}>
+      {desktop ? <Text style={styles.sidebarSectionLabel}>WORKSPACE</Text> : null}
+      {NAV_ITEMS.map((item) => {
+        const active = item.key === activeTab;
+        return (
+          <TouchableOpacity
+            key={item.key}
+            onPress={() => router.push(item.route)}
+            style={[
+              desktop ? styles.sidebarNavItem : styles.navItem,
+              active && (desktop ? styles.sidebarNavItemActive : styles.navItemActive),
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={item.label}
+          >
+            <Text style={[
+              desktop ? styles.sidebarNavIcon : styles.navIcon,
+              active && styles.navIconActive,
+            ]}>{item.icon}</Text>
+            <Text style={[
+              desktop ? styles.sidebarNavLabel : styles.navLabel,
+              active && styles.navLabelActive,
+            ]}>{item.label}</Text>
+            {desktop && active ? <View style={styles.sidebarIndicator} /> : null}
+            {!desktop && active ? <View style={styles.navIndicator} /> : null}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
 
   return (
-    <SafeAreaView className="flex-1 bg-[#090910]" style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'right', 'bottom', 'left']}>
       <StatusBar style="light" />
-      <View className="flex-1 bg-[#090910]" style={styles.root}>
-        <View className="flex-row items-center justify-between" style={styles.topBar}>
-          <View style={styles.brand}>
-            <View style={styles.logoMark}><Text style={styles.logoText}>H</Text></View>
-            <Text style={styles.brandName}>Humaixo <Text style={styles.brandAccent}>Arth</Text></Text>
+      <View style={[styles.root, isDesktop && styles.desktopRoot]}>
+        {isDesktop ? (
+          <View style={styles.sidebar}>
+            <View style={styles.brand}>
+              <View style={styles.logoMark}><Text style={styles.logoText}>H</Text></View>
+              <Text style={styles.brandName}>Humaixo <Text style={styles.brandAccent}>Arth</Text></Text>
+            </View>
+            {renderNavigation(true)}
+            <View style={styles.sidebarFooter}>
+              <Text style={styles.sidebarFooterTitle}>Your money, clearly understood.</Text>
+              <Text style={styles.sidebarFooterText}>Private finance tools for everyday decisions.</Text>
+            </View>
           </View>
-          <View style={styles.topAction}>
-            {rightAction ?? (
-              <TouchableOpacity
-                onPress={() => router.push('/profile')}
-                style={styles.profileButton}
-                accessibilityRole="button"
-                accessibilityLabel="Open profile and settings"
-              >
-                <Text style={styles.profileButtonText}>◉</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+        ) : null}
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[styles.content, contentStyle]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.pageHeading}>
-            <Text style={styles.pageTitle}>{title}</Text>
-            {subtitle ? <Text style={styles.pageSubtitle}>{subtitle}</Text> : null}
+        <View style={styles.mainColumn}>
+          <View style={[styles.topBar, { paddingHorizontal: horizontalPadding }]}>
+            {!isDesktop ? (
+              <View style={styles.brand}>
+                <View style={styles.logoMark}><Text style={styles.logoText}>H</Text></View>
+                <Text style={styles.brandName}>Humaixo <Text style={styles.brandAccent}>Arth</Text></Text>
+              </View>
+            ) : <View style={styles.desktopTopSpacer} />}
+            <View style={styles.topAction}>
+              {rightAction ?? (
+                <TouchableOpacity
+                  onPress={() => router.push('/profile')}
+                  style={styles.profileButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open profile and settings"
+                >
+                  <Text style={styles.profileButtonText}>H</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-          {children}
-        </ScrollView>
 
-        <View style={styles.bottomNav}>
-          {NAV_ITEMS.map((item) => {
-            const active = item.key === activeTab;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                onPress={() => router.push(item.route)}
-                style={styles.navItem}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={item.label}
-              >
-                <Text style={[styles.navIcon, active && styles.navIconActive]}>{item.icon}</Text>
-                <Text style={[styles.navLabel, active && styles.navLabelActive]}>{item.label}</Text>
-                {active ? <View style={styles.navIndicator} /> : null}
-              </TouchableOpacity>
-            );
-          })}
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingHorizontal: horizontalPadding },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.content, contentStyle, isDesktop && styles.desktopContent]}>
+              <View style={styles.pageHeading}>
+                <Text style={styles.pageTitle}>{title}</Text>
+                {subtitle ? <Text style={styles.pageSubtitle}>{subtitle}</Text> : null}
+              </View>
+              {children}
+            </View>
+          </ScrollView>
+
+          {!isDesktop ? renderNavigation(false) : null}
         </View>
       </View>
     </SafeAreaView>
@@ -105,20 +149,24 @@ export function FinanceScreen({
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: FinanceTheme.colors.background },
   root: { flex: 1, backgroundColor: FinanceTheme.colors.background },
-  topBar: {
-    minHeight: 54,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  desktopRoot: { flexDirection: 'row' },
+  mainColumn: { flex: 1, minWidth: 0, backgroundColor: FinanceTheme.colors.background },
+  sidebar: {
+    width: 236,
+    flexShrink: 0,
+    paddingHorizontal: 18,
+    paddingTop: 22,
+    paddingBottom: 18,
+    backgroundColor: '#0d0d17',
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: FinanceTheme.colors.border,
   },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
   logoMark: {
-    width: 34,
-    height: 34,
-    borderRadius: 11,
+    width: 36,
+    height: 36,
+    flexShrink: 0,
+    borderRadius: 12,
     backgroundColor: FinanceTheme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -128,46 +176,65 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   logoText: { color: '#ffffff', fontSize: 17, fontWeight: '900' },
-  brandName: { color: FinanceTheme.colors.text, fontSize: 16, fontWeight: '700' },
+  brandName: { color: FinanceTheme.colors.text, fontSize: 18, fontWeight: '700', flexShrink: 1 },
   brandAccent: { color: FinanceTheme.colors.primarySoft },
+  sidebarNavigation: { gap: 7, marginTop: 42 },
+  sidebarSectionLabel: { color: FinanceTheme.colors.subtle, fontSize: 9, fontWeight: '800', letterSpacing: 1.2, marginBottom: 6, paddingHorizontal: 11 },
+  sidebarNavItem: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, borderRadius: 13, position: 'relative' },
+  sidebarNavItemActive: { backgroundColor: 'rgba(128,92,255,0.15)' },
+  sidebarNavIcon: { width: 22, textAlign: 'center', color: FinanceTheme.colors.subtle, fontSize: 19, fontWeight: '700' },
+  sidebarNavLabel: { color: FinanceTheme.colors.muted, fontSize: 12, fontWeight: '600' },
+  sidebarIndicator: { position: 'absolute', left: 0, top: 10, bottom: 10, width: 3, borderRadius: 3, backgroundColor: FinanceTheme.colors.primary },
+  sidebarFooter: { marginTop: 'auto', borderRadius: 15, padding: 13, backgroundColor: FinanceTheme.colors.surface, borderWidth: 1, borderColor: FinanceTheme.colors.border },
+  sidebarFooterTitle: { color: FinanceTheme.colors.text, fontSize: 10, fontWeight: '800' },
+  sidebarFooterText: { color: FinanceTheme.colors.subtle, fontSize: 9, lineHeight: 14, marginTop: 5 },
+  topBar: {
+    width: '100%',
+    maxWidth: 1320,
+    alignSelf: 'center',
+    minHeight: 58,
+    paddingTop: 8,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  desktopTopSpacer: { flex: 1 },
   topAction: { minWidth: 38, alignItems: 'flex-end' },
   profileButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     backgroundColor: FinanceTheme.colors.surface,
     borderColor: FinanceTheme.colors.border,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  profileButtonText: { color: FinanceTheme.colors.primarySoft, fontSize: 17, fontWeight: '800' },
-  scrollView: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28, gap: 16 },
+  profileButtonText: { color: FinanceTheme.colors.primarySoft, fontSize: 13, fontWeight: '800' },
+  scrollView: { flex: 1, minWidth: 0 },
+  scrollContent: { width: '100%', alignItems: 'center', paddingTop: 12, paddingBottom: 28 },
+  content: { width: '100%', maxWidth: 760, gap: 16 },
+  desktopContent: { maxWidth: 1120, gap: 20 },
   pageHeading: { marginBottom: 2 },
-  pageTitle: { color: FinanceTheme.colors.text, fontSize: 25, fontWeight: '800', letterSpacing: -0.5 },
-  pageSubtitle: { color: FinanceTheme.colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  pageTitle: { color: FinanceTheme.colors.text, fontSize: Typography.size.title, lineHeight: Typography.lineHeight.title, fontWeight: '800', letterSpacing: -0.5, flexShrink: 1 },
+  pageSubtitle: { color: FinanceTheme.colors.muted, fontSize: Typography.size.subtext, lineHeight: Typography.lineHeight.subtext, marginTop: 5, maxWidth: 760 },
   bottomNav: {
-    minHeight: 66,
+    width: '100%',
+    minHeight: 65,
     backgroundColor: '#101019',
     borderTopColor: FinanceTheme.colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
-    paddingHorizontal: 6,
-    paddingTop: 7,
-    paddingBottom: 5,
+    paddingHorizontal: 5,
+    paddingTop: 6,
+    paddingBottom: 4,
   },
-  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, position: 'relative' },
-  navIcon: { color: FinanceTheme.colors.subtle, fontSize: 21, lineHeight: 24, fontWeight: '700' },
+  navItem: { flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 1, position: 'relative', borderRadius: 10 },
+  navItemActive: { backgroundColor: 'rgba(128,92,255,0.07)' },
+  navIcon: { color: FinanceTheme.colors.subtle, fontSize: 20, lineHeight: 24, fontWeight: '700' },
   navIconActive: { color: FinanceTheme.colors.primarySoft },
-  navLabel: { color: FinanceTheme.colors.subtle, fontSize: 9, fontWeight: '600' },
+  navLabel: { color: FinanceTheme.colors.subtle, fontSize: Typography.size.caption, fontWeight: '600' },
   navLabelActive: { color: FinanceTheme.colors.primarySoft },
-  navIndicator: {
-    position: 'absolute',
-    top: -7,
-    width: 26,
-    height: 2,
-    borderRadius: 2,
-    backgroundColor: FinanceTheme.colors.primary,
-  },
+  navIndicator: { position: 'absolute', top: 0, width: 24, height: 2, borderRadius: 2, backgroundColor: FinanceTheme.colors.primary },
 });

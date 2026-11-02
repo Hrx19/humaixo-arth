@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/auth-context';
 import { FinanceScreen } from '@/components/finance-screen';
@@ -10,6 +11,18 @@ import { useFinanceStore } from '@/store/finance-store';
 import type { CreateTransactionInput, TransactionType } from '@/types/finance';
 
 const CATEGORIES = ['Food', 'Shopping', 'Travel', 'Fuel', 'Bills', 'Transfer', 'Income', 'Healthcare', 'Rent', 'Other'];
+const CATEGORY_ICONS: Record<string, string> = {
+  Food: '🍽️',
+  Shopping: '🛍️',
+  Travel: '✈️',
+  Fuel: '⛽',
+  Bills: '🧾',
+  Transfer: '↔️',
+  Income: '↗️',
+  Healthcare: '✚',
+  Rent: '⌂',
+  Other: '•••',
+};
 
 export default function AddTransactionScreen(): React.JSX.Element {
   const router = useRouter();
@@ -19,6 +32,8 @@ export default function AddTransactionScreen(): React.JSX.Element {
   const refreshDashboard = useFinanceStore((state) => state.refreshDashboard);
   const [type, setType] = useState<TransactionType>('debit');
   const [amount, setAmount] = useState('');
+  const [transactionDate, setTransactionDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [merchant, setMerchant] = useState('');
   const [counterparty, setCounterparty] = useState('');
   const [category, setCategory] = useState('Food');
@@ -55,6 +70,7 @@ export default function AddTransactionScreen(): React.JSX.Element {
       amount: numericAmount,
       type,
       category,
+      date: transactionDate.toISOString(),
       ...(counterparty.trim() ? { counterparty: counterparty.trim(), counterpartyType: 'person' as const } : {}),
       ...(paymentMethod.trim() ? { paymentMethod: paymentMethod.trim() } : {}),
       ...(numericBalance !== undefined ? { balanceAfter: numericBalance } : {}),
@@ -91,15 +107,61 @@ export default function AddTransactionScreen(): React.JSX.Element {
             <TypeButton label="Money in" active={type === 'credit'} onPress={() => { setType('credit'); setCategory('Income'); }} />
           </View>
 
-          <Field label="Amount (₹)" value={amount} onChangeText={setAmount} placeholder="0.00" keyboardType="decimal-pad" />
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Amount (₹)</Text>
+            <TextInput
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="0.00"
+              placeholderTextColor={FinanceTheme.colors.subtle}
+              keyboardType="decimal-pad"
+              style={[styles.input, styles.amountInput]}
+              accessibilityLabel="Transaction amount in rupees"
+            />
+          </View>
           <Field label="Merchant or description" value={merchant} onChangeText={setMerchant} placeholder="e.g. Swiggy, salary, rent" />
           <Field label="Person involved (optional)" value={counterparty} onChangeText={setCounterparty} placeholder="e.g. Rahul Sharma" />
 
           <Text style={styles.fieldLabel}>Category</Text>
-          <View style={styles.chipWrap}>
+          <View style={styles.categoryGrid}>
             {CATEGORIES.map((value) => (
-              <TypeButton key={value} label={value} active={category === value} onPress={() => setCategory(value)} compact />
+              <TouchableOpacity
+                key={value}
+                onPress={() => setCategory(value)}
+                style={[styles.categoryChoice, category === value && styles.categoryChoiceActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: category === value }}
+              >
+                <Text style={styles.categoryIcon}>{CATEGORY_ICONS[value]}</Text>
+                <Text style={[styles.categoryLabel, category === value && styles.typeButtonTextActive]}>{value}</Text>
+              </TouchableOpacity>
             ))}
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Transaction date</Text>
+            <TouchableOpacity
+              onPress={() => setShowDatePicker((visible) => !visible)}
+              style={styles.dateButton}
+              accessibilityRole="button"
+            >
+              <Text style={styles.dateButtonText}>
+                {transactionDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </Text>
+              <Text style={styles.dateButtonIcon}>▦</Text>
+            </TouchableOpacity>
+            {showDatePicker ? (
+              <DateTimePicker
+                value={transactionDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                maximumDate={new Date()}
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) setTransactionDate(selectedDate);
+                  if (Platform.OS !== 'ios' || event.type === 'dismissed') setShowDatePicker(false);
+                }}
+              />
+            ) : null}
           </View>
 
           {accounts.length > 0 ? (
@@ -162,7 +224,16 @@ const styles = StyleSheet.create({
   field: { gap: 6 },
   fieldLabel: { color: FinanceTheme.colors.muted, fontSize: 9, fontWeight: '700' },
   input: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: FinanceTheme.colors.border, backgroundColor: FinanceTheme.colors.background, paddingHorizontal: 11, color: FinanceTheme.colors.text, fontSize: 11 },
+  amountInput: { minHeight: 64, fontSize: 30, fontWeight: '800', letterSpacing: 0.3 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  categoryChoice: { width: '18%', minWidth: 62, flexGrow: 1, minHeight: 76, alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 13, borderWidth: 1, borderColor: FinanceTheme.colors.border, backgroundColor: FinanceTheme.colors.surfaceRaised },
+  categoryChoiceActive: { borderColor: FinanceTheme.colors.primary, backgroundColor: 'rgba(128,92,255,0.2)' },
+  categoryIcon: { fontSize: 21, color: FinanceTheme.colors.primarySoft },
+  categoryLabel: { color: FinanceTheme.colors.muted, fontSize: 11, fontWeight: '700' },
+  dateButton: { minHeight: 46, borderRadius: 11, borderWidth: 1, borderColor: FinanceTheme.colors.border, backgroundColor: FinanceTheme.colors.background, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dateButtonText: { color: FinanceTheme.colors.text, fontSize: 14, fontWeight: '600' },
+  dateButtonIcon: { color: FinanceTheme.colors.primarySoft, fontSize: 19 },
   addAccountLink: { paddingVertical: 7 },
   addAccountLinkText: { color: FinanceTheme.colors.primarySoft, fontSize: 10, fontWeight: '700' },
   optionalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },

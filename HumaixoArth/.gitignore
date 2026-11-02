@@ -1,43 +1,112 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# =============================================================================
+# 1. SECURITY & ENVIRONMENT VARIABLES (CRITICAL: NEVER COMMIT THESE)
+# =============================================================================
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+.env*.local
+backend/.env*
+HumaixoArth/.env*
 
-# dependencies
+# =============================================================================
+# 2. DEPENDENCIES (Node Modules)
+# =============================================================================
 node_modules/
+backend/node_modules/
+HumaixoArth/node_modules/
+bower_components/
 
-# Expo
-.expo/
+# =============================================================================
+# 3. BUILD & COMPILED OUTPUTS
+# =============================================================================
 dist/
-web-build/
-expo-env.d.ts
+build/
+backend/dist/
+HumaixoArth/dist/
+HumaixoArth/web-build/
+*.tsbuildinfo
+*.jsbundle
+*.hbc
 
-# Native
-.kotlin/
-*.orig.*
+# =============================================================================
+# 4. EXPO & REACT NATIVE SPECIFIC
+# =============================================================================
+.expo/
+expo-env.d.ts
+.metro-health-check*
+
+# Generated native folders (if you ever run prebuild)
+/ios/
+/android/
+
+# Native Build Artifacts & Credentials
+*.apk
+*.aab
+*.ipa
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
+*.orig.*
 
-# Metro
-.metro-health-check*
+# =============================================================================
+# 5. NODE.JS / BACKEND SPECIFIC
+# =============================================================================
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
 
+# =============================================================================
+# 6. TESTING & COVERAGE
+# =============================================================================
+coverage/
+*.lcov
+.nyc_output/
+.jest/
+
+# =============================================================================
+# 7. OPERATING SYSTEM & EDITOR FILES
+# =============================================================================
 # macOS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Windows
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# 8. MISCELLANEOUS
+# =============================================================================
+# Learn more: https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 *.pem
-
-# local env files
-.env*.local
-
-# typescript
-*.tsbuildinfo
-
-example
-
-# generated native folders
-/ios
-/android
+example/

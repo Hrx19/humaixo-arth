@@ -9,6 +9,7 @@ Humaixo Arth is a private finance ledger for tracking account balances, daily mo
 - Multiple tracked accounts with opening balance/date, type, provider, and optional last four digits.
 - Manual transaction entry and searchable/paginated transaction ledger.
 - Statement CSV preview, row validation, duplicate detection, import history, and transaction import. Raw CSV content is not saved after the API request; the file hash and import summary are retained.
+- Authenticated PDF statement extraction for digital bank PDFs, with account ownership checks and duplicate detection. PDFs are processed in memory and are not stored; scanned image-only PDFs are rejected.
 - Category and monthly cash-flow analytics, pie/bar/line charts, income/expense summaries, account net balance, and historical balance lookup.
 - Payee totals: money sent, money received, net flow, count, and transaction timeline.
 - SMS parser for manual paste and explicit one-tap clipboard read. It distinguishes the transaction amount from available balance and reports a confidence score.
@@ -67,7 +68,9 @@ Set `EXPO_PUBLIC_API_URL` for the device you use:
 
 - Web on the same computer: `http://localhost:5000`
 - Android emulator: `http://10.0.2.2:5000`
-- Physical phone: `http://<computer-LAN-IP>:5000` (phone and computer must share a network)
+- Physical phone in Expo LAN mode: the app infers the computer's LAN address from the Expo development host. Keep the backend port reachable and both devices on the same network. Set the explicit LAN IP if Expo is running in tunnel mode.
+
+See [the authentication setup guide](../docs/authentication-setup.md) for Google and GitHub OAuth credentials. Email/password auth works in Expo Go. Native Google/GitHub callbacks require a development build with the app scheme configured.
 
 ## Importing statements
 
@@ -79,6 +82,10 @@ Create an account first and set its opening balance/date to a known point. Pick 
 - Optional Balance, Recipient/Payee, Reference/UTR, and Category
 
 Use a running balance column whenever the bank provides one. For older data without a running balance, make sure the account opening balance/date predates the first transaction you import.
+
+Digital PDF statements can be imported from **Import PDF** on the dashboard. Select the destination account and a PDF of 5 MB or less. The parser supports common Indian date, amount and credit/debit text patterns; extracted rows are heuristic and should be reviewed in the transaction ledger. Image-only/scanned PDFs are not supported. The authenticated endpoint is `POST /api/parse-statement` with multipart fields `accountId` and `file`.
+
+The authenticated analytics endpoints are `GET /api/analytics/summary`, `GET /api/analytics/category-breakdown`, and `GET /api/analytics/monthly-trend?months=12`. Transaction history is available at `GET /api/transactions` with `page` and `limit`; records can be removed with `DELETE /api/transactions/:id`.
 
 ## SMS and platform boundaries
 

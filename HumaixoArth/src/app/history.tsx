@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useAuth } from '@/auth/auth-context';
 import { FinanceScreen } from '@/components/finance-screen';
 import { EmptyState, SectionHeader, SurfaceCard, TransactionRow } from '@/components/finance-ui';
@@ -24,6 +24,11 @@ const GUEST_HISTORY: BalanceHistoryPoint[] = [
 ];
 
 export default function HistoryScreen(): React.JSX.Element {
+  const { width: screenWidth } = useWindowDimensions();
+  const isDesktopViewport = Platform.OS === 'web' && screenWidth >= 1024;
+  const chartWidth = isDesktopViewport
+    ? Math.min(720, Math.max(240, screenWidth - 320))
+    : Math.min(680, Math.max(240, screenWidth - (screenWidth < 480 ? 76 : 96)));
   const { status, token } = useAuth();
   const isGuest = status !== 'authenticated' || !token;
   const accounts = useFinanceStore((state) => state.accounts);
@@ -164,7 +169,7 @@ export default function HistoryScreen(): React.JSX.Element {
             ) : (
               <LineChart
                 data={{ labels: chartLabels, datasets: [{ data: visibleHistory.map((point) => point.balance) }] }}
-                width={Math.max(220, Dimensions.get('window').width - 70)}
+                width={chartWidth}
                 height={190}
                 chartConfig={{
                   backgroundColor: FinanceTheme.colors.surface,

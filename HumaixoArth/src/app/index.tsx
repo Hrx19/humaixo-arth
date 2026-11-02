@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,9 +9,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { PieChart } from 'react-native-chart-kit';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { LineChart, PieChart } from 'react-native-chart-kit';
 import * as Clipboard from 'expo-clipboard';
 import { FinanceScreen } from '@/components/finance-screen';
 import { EmptyState, SectionHeader, SurfaceCard, TransactionRow, PrimaryButton } from '@/components/finance-ui';
@@ -21,9 +21,9 @@ import { useAuth } from '@/auth/auth-context';
 import { FinanceService } from '@/services/finance-service';
 import { useFinanceStore } from '@/store/finance-store';
 import type { FinanceTransaction } from '@/types/finance';
-import { CategoryBreakdownFallback } from '@/components/web-chart-fallbacks';
+import { CashFlowFallback, CategoryBreakdownFallback } from '@/components/web-chart-fallbacks';
+import { PreferencesService } from '@/services/preferences-service';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 const CHART_COLORS = ['#8b6cff', '#22c997', '#f5b84b', '#58a6ff', '#ff6375', '#d879ff'];
 
 type SpendingChartItem = {
@@ -58,6 +58,11 @@ function isSuccessfulParse(
 
 export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const isDesktopViewport = Platform.OS === 'web' && screenWidth >= 1024;
+  const chartWidth = isDesktopViewport
+    ? Math.min(720, Math.max(240, screenWidth - 320))
+    : Math.min(680, Math.max(240, screenWidth - (screenWidth < 480 ? 76 : 96)));
   const { status, token, user } = useAuth();
   const isGuest = status !== 'authenticated' || !token;
   const accounts = useFinanceStore((state) => state.accounts);
@@ -77,6 +82,19 @@ export default function HomeScreen(): React.JSX.Element {
       void refreshDashboard(token);
     }
   }, [refreshDashboard, status, token]);
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void PreferencesService.getHideBalances()
+      .then((hidden) => { if (active) setBalanceHidden(hidden); })
+      .catch((error: unknown) => {
+        Alert.alert(
+          'Could not load preferences',
+          error instanceof Error ? error.message : 'Dashboard privacy preferences are unavailable.',
+        );
+      });
+    return () => { active = false; };
+  }, []));
 
   const activeAccountId = selectedAccountId ?? accounts[0]?.id;
 
@@ -162,6 +180,18 @@ export default function HomeScreen(): React.JSX.Element {
     }
   };
 
+  const toggleBalanceVisibility = (): void => {
+    const nextHidden = !balanceHidden;
+    setBalanceHidden(nextHidden);
+    void PreferencesService.setHideBalances(nextHidden).catch((error: unknown) => {
+      setBalanceHidden(!nextHidden);
+      Alert.alert(
+        'Could not save preference',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    });
+  };
+
   const netWorth = analytics?.trackedBalance ?? 0;
   const currentMonth = analytics?.thisMonth;
   const greetingName = user?.name?.trim().split(/\s+/)[0] || 'there';
@@ -187,7 +217,7 @@ export default function HomeScreen(): React.JSX.Element {
           <View style={styles.balanceLabelRow}>
             <Text style={styles.balanceLabel}>{isGuest ? 'NET WORTH PREVIEW' : 'TOTAL NET WORTH'}</Text>
             <TouchableOpacity
-              onPress={() => setBalanceHidden((current) => !current)}
+              onPress={toggleBalanceVisibility}
               accessibilityRole="button"
               accessibilityLabel={balanceHidden ? 'Show balance' : 'Hide balance'}
             >
@@ -300,6 +330,7 @@ export default function HomeScreen(): React.JSX.Element {
       <View style={styles.quickActions}>
         <QuickAction icon="＋" label="Add transaction" onPress={() => (isGuest ? requireLogin() : router.push('/add-transaction'))} />
         <QuickAction icon="⇧" label="Import statement" onPress={() => (isGuest ? requireLogin() : router.push('/statement-import'))} />
+        <QuickAction icon="▤" label="Import PDF" onPress={() => (isGuest ? requireLogin() : router.push('/parse-statement'))} />
       </View>
 
       <View>
@@ -383,7 +414,7 @@ export default function HomeScreen(): React.JSX.Element {
               ) : (
                 <PieChart
                   data={chartData.map(({ amount, ...chartItem }) => ({ ...chartItem, population: amount }))}
-                  width={Math.max(250, SCREEN_WIDTH - 76)}
+                  width={chartWidth}
                   height={190}
                   chartConfig={{
                     backgroundColor: FinanceTheme.colors.surface,
@@ -401,6 +432,71 @@ export default function HomeScreen(): React.JSX.Element {
               {isGuest ? <Text style={styles.chartFootnote}>Sign in and import a statement to see your real breakdown.</Text> : null}
             </>
           )}
+        </SurfaceCard>
+      </View>
+
+      <View>
+        <SectionHeader title="Monthly cash flow" />
+        <SurfaceCard style={styles.chartCard}>
+          {!isGuest && !analytics?.monthlyTotals.length ? (
+            <Text style={styles.chartFootnote}>Add transactions to see your monthly income and spending trend.</Text>
+          ) : isGuest ? (
+            <CashFlowFallback data={[
+              { label: 'Jun', income: 68000, expense: 47200 },
+              { label: 'Jul', income: 71000, expense: 51800 },
+              { label: 'Aug', income: 75000, expense: 56600 },
+              { label: 'Sep', income: 73500, expense: 49300 },
+              { label: 'Oct', income: 79000, expense: 57200 },
+              { label: 'Nov', income: 75000, expense: 56600 },
+            ]} />
+          ) : Platform.OS === 'web' ? (
+            <CashFlowFallback
+              data={(analytics?.monthlyTotals ?? []).slice(-6).map((month) => ({
+                label: new Date(month.year, month.month - 1).toLocaleDateString('en-IN', { month: 'short' }),
+                income: month.income,
+                expense: month.expense,
+              }))}
+            />
+          ) : (
+            <LineChart
+              data={{
+                labels: (analytics?.monthlyTotals ?? []).slice(-6).map((month) =>
+                  new Date(month.year, month.month - 1).toLocaleDateString('en-IN', { month: 'short' }),
+                ),
+                datasets: [
+                  {
+                    data: (analytics?.monthlyTotals ?? []).slice(-6).map((month) => month.expense),
+                    color: () => FinanceTheme.colors.red,
+                    strokeWidth: 3,
+                  },
+                  {
+                    data: (analytics?.monthlyTotals ?? []).slice(-6).map((month) => month.income),
+                    color: () => FinanceTheme.colors.green,
+                    strokeWidth: 3,
+                  },
+                ],
+                legend: ['Spent', 'Income'],
+              }}
+              width={chartWidth}
+              height={220}
+              chartConfig={{
+                backgroundColor: FinanceTheme.colors.surface,
+                backgroundGradientFrom: FinanceTheme.colors.surface,
+                backgroundGradientTo: FinanceTheme.colors.surface,
+                decimalPlaces: 0,
+                color: (opacity = 1) => `rgba(255,255,255,${opacity})`,
+                labelColor: () => FinanceTheme.colors.muted,
+                propsForDots: { r: '3', strokeWidth: '2', stroke: FinanceTheme.colors.surface },
+                propsForBackgroundLines: { stroke: FinanceTheme.colors.border },
+              }}
+              bezier
+              withInnerLines
+              withOuterLines={false}
+              style={styles.lineChart}
+            />
+          )}
+          {isGuest ? <Text style={styles.chartFootnote}>Illustrative preview · sign in to see your own cash flow.</Text> : null}
+          {!isGuest ? <Text style={styles.chartLegend}>Spent  ·  Income</Text> : null}
         </SurfaceCard>
       </View>
 
@@ -625,6 +721,8 @@ const styles = StyleSheet.create({
   accountChipTextActive: { color: FinanceTheme.colors.primarySoft, fontWeight: '700' },
   guestHint: { color: FinanceTheme.colors.subtle, fontSize: 9, textAlign: 'center', marginTop: -4 },
   chartCard: { paddingHorizontal: 7, alignItems: 'center', minHeight: 205 },
+  lineChart: { marginVertical: 8, borderRadius: 16 },
+  chartLegend: { color: FinanceTheme.colors.muted, fontSize: 12, marginBottom: 8 },
   chartDemoLabel: { color: FinanceTheme.colors.amber, fontSize: 8, fontWeight: '800', letterSpacing: 0.6, alignSelf: 'flex-start', marginLeft: 9, marginTop: 6 },
   chartFootnote: { color: FinanceTheme.colors.subtle, fontSize: 9, textAlign: 'center', marginVertical: 8, lineHeight: 14 },
   activityCard: { paddingHorizontal: 13, paddingVertical: 4 },

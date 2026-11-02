@@ -13,6 +13,8 @@ import { accountRouter } from './routes/accounts';
 import { transactionRouter } from './routes/transactions';
 import { aiRouter } from './routes/ai';
 import { statementRouter } from './routes/statements';
+import { analyticsRouter } from './routes/analytics';
+import { pdfParserRouter } from './routes/pdf-parser';
 
 export function createApp(): Express {
   const app = express();
@@ -59,8 +61,10 @@ export function createApp(): Express {
   app.use('/api/auth', authRouter);
   app.use('/api/accounts', accountRouter);
   app.use('/api/transactions', transactionRouter);
+  app.use('/api/analytics', analyticsRouter);
   app.use('/api/parse-sms', aiRouter);
   app.use('/api/statements', statementRouter);
+  app.use('/api/parse-statement', pdfParserRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

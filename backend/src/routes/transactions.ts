@@ -54,9 +54,15 @@ const balanceHistoryQuerySchema = z.object({
 }).strict();
 
 type CategoryAggregate = { _id: string; amount: number; count: number };
-type MonthlyAggregate = {
-  _id: { year: number; month: number; type: TransactionType };
-  amount: number;
+type CashFlowAggregate = {
+  _id: null;
+  income: number;
+  expense: number;
+};
+type MonthlyCashFlowAggregate = {
+  _id: { year: number; month: number };
+  income: number;
+  expense: number;
 };
 type MonthlySummary = { year: number; month: number; income: number; expense: number };
 type PersonAggregate = {
@@ -167,7 +173,25 @@ transactionRouter.get('/analytics', async (request, response) => {
     const userObjectId = getUserObjectId(userId);
     const match = { userId: userObjectId, date: { $gte: startDate, $lte: now } };
 
-    const [categoryRows, monthlyRows] = await Promise.all([
+    const [periodTotals, categoryRows, monthlyRows] = await Promise.all([
+      TransactionModel.aggregate<CashFlowAggregate>([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            income: {
+              $sum: {
+                $cond: [{ $eq: ['$type', 'credit'] }, '$amount', 0],
+              },
+            },
+            expense: {
+              $sum: {
+                $cond: [{ $eq: ['$type', 'debit'] }, '$amount', 0],
+              },
+            },
+          },
+        },
+      ]),
       TransactionModel.aggregate<CategoryAggregate>([
         { $match: { ...match, type: 'debit' } },
         {
@@ -179,16 +203,24 @@ transactionRouter.get('/analytics', async (request, response) => {
         },
         { $sort: { amount: -1 } },
       ]),
-      TransactionModel.aggregate<MonthlyAggregate>([
+      TransactionModel.aggregate<MonthlyCashFlowAggregate>([
         { $match: match },
         {
           $group: {
             _id: {
               year: { $year: '$date' },
               month: { $month: '$date' },
-              type: '$type',
             },
-            amount: { $sum: '$amount' },
+            income: {
+              $sum: {
+                $cond: [{ $eq: ['$type', 'credit'] }, '$amount', 0],
+              },
+            },
+            expense: {
+              $sum: {
+                $cond: [{ $eq: ['$type', 'debit'] }, '$amount', 0],
+              },
+            },
           },
         },
         { $sort: { '_id.year': 1, '_id.month': 1 } },
@@ -206,18 +238,14 @@ transactionRouter.get('/analytics', async (request, response) => {
     for (const row of monthlyRows) {
       const summary = monthlyByKey.get(`${row._id.year}-${row._id.month}`);
       if (!summary) continue;
-      if (row._id.type === 'credit') summary.income = row.amount;
-      if (row._id.type === 'debit') summary.expense = row.amount;
+      summary.income = row.income;
+      summary.expense = row.expense;
     }
 
     const monthlyTotals = Array.from(monthlyByKey.values());
-    const totals = monthlyTotals.reduce(
-      (sum, month) => ({
-        income: sum.income + month.income,
-        expense: sum.expense + month.expense,
-      }),
-      { income: 0, expense: 0 },
-    );
+    const totalIncome = periodTotals[0]?.income ?? 0;
+    const totalExpense = periodTotals[0]?.expense ?? 0;
+    const totals = { income: totalIncome, expense: totalExpense };
     const currentMonth = monthlyTotals[monthlyTotals.length - 1] ?? {
       year: now.getFullYear(),
       month: now.getMonth() + 1,
@@ -228,21 +256,34 @@ transactionRouter.get('/analytics', async (request, response) => {
     const startOfWeek = new Date(startOfToday);
     startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
 
+    const cashFlowForRange = (from: Date) => TransactionModel.aggregate<CashFlowAggregate>([
+      { $match: { userId: userObjectId, date: { $gte: from, $lte: now } } },
+      {
+        $group: {
+          _id: null,
+          income: {
+            $sum: {
+              $cond: [{ $eq: ['$type', 'credit'] }, '$amount', 0],
+            },
+          },
+          expense: {
+            $sum: {
+              $cond: [{ $eq: ['$type', 'debit'] }, '$amount', 0],
+            },
+          },
+        },
+      },
+    ]);
+
     const [todayRows, weekRows, accountBalances] = await Promise.all([
-      TransactionModel.aggregate<MonthlyAggregate>([
-        { $match: { userId: userObjectId, date: { $gte: startOfToday, $lte: now } } },
-        { $group: { _id: { year: 0, month: 0, type: '$type' }, amount: { $sum: '$amount' } } },
-      ]),
-      TransactionModel.aggregate<MonthlyAggregate>([
-        { $match: { userId: userObjectId, date: { $gte: startOfWeek, $lte: now } } },
-        { $group: { _id: { year: 0, month: 0, type: '$type' }, amount: { $sum: '$amount' } } },
-      ]),
+      cashFlowForRange(startOfToday),
+      cashFlowForRange(startOfWeek),
       getUserAccountBalances(userObjectId, now),
     ]);
 
-    const toIncomeExpense = (rows: MonthlyAggregate[]) => ({
-      income: rows.find((row) => row._id.type === 'credit')?.amount ?? 0,
-      expense: rows.find((row) => row._id.type === 'debit')?.amount ?? 0,
+    const toIncomeExpense = (rows: CashFlowAggregate[]) => ({
+      income: rows[0]?.income ?? 0,
+      expense: rows[0]?.expense ?? 0,
     });
 
     const accountTotal = accountBalances.reduce((sum, item) => sum + item.balance, 0);
@@ -253,8 +294,17 @@ transactionRouter.get('/analytics', async (request, response) => {
         amount: row.amount,
         count: row.count,
       })),
+      categoryBreakdown: categoryRows.map((row) => ({
+        category: row._id,
+        amount: row.amount,
+        count: row.count,
+      })),
       monthlyTotals,
+      monthlyTrend: monthlyTotals,
       totals: { ...totals, net: totals.income - totals.expense },
+      totalIncome,
+      totalExpense,
+      balance: totalIncome - totalExpense,
       today: toIncomeExpense(todayRows),
       thisWeek: toIncomeExpense(weekRows),
       thisMonth: currentMonth,
@@ -635,5 +685,35 @@ transactionRouter.post('/', async (request, response) => {
       stack: error instanceof Error ? error.stack : undefined,
     });
     return response.status(500).json({ success: false, error: 'Failed to create transaction.' });
+  }
+});
+
+transactionRouter.delete('/:id', async (request, response) => {
+  const userId = request.auth?.userId;
+  if (!userId) {
+    return response.status(401).json({ success: false, error: 'Authentication is required.' });
+  }
+
+  const transactionId = request.params.id;
+  if (!/^[a-f\d]{24}$/i.test(transactionId)) {
+    return response.status(400).json({ success: false, error: 'Transaction ID is invalid.' });
+  }
+
+  try {
+    const deleted = await TransactionModel.findOneAndDelete({
+      _id: new Types.ObjectId(transactionId),
+      userId: getUserObjectId(userId),
+    });
+    if (!deleted) {
+      return response.status(404).json({ success: false, error: 'Transaction was not found.' });
+    }
+
+    return response.status(200).json({ success: true, message: 'Transaction deleted.' });
+  } catch (error) {
+    logger.error('Transaction delete request failed.', {
+      message: errorResponse(error, 'Unknown transaction delete error.'),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return response.status(500).json({ success: false, error: 'Failed to delete transaction.' });
   }
 });

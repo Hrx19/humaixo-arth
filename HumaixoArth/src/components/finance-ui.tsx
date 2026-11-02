@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { FinanceTheme, formatDate, formatINR, formatShortDate } from '@/constants/finance-theme';
 import type { FinanceTransaction } from '@/types/finance';
+import { Trash2 } from 'lucide-react-native';
+import { Typography } from '@/theme/typography';
 
 type SurfaceCardProps = {
   children: ReactNode;
@@ -95,6 +97,7 @@ type TransactionRowProps = {
   accountName?: string;
   expanded?: boolean;
   onPress?: () => void;
+  onDelete?: () => void;
 };
 
 function getTransactionIcon(transaction: FinanceTransaction): string {
@@ -116,6 +119,7 @@ function TransactionRowComponent({
   accountName,
   expanded = false,
   onPress,
+  onDelete,
 }: TransactionRowProps): React.JSX.Element {
   const isCredit = transaction.type === 'credit';
   return (
@@ -149,9 +153,21 @@ function TransactionRowComponent({
           </View>
         ) : null}
       </View>
-      <Text style={[styles.transactionAmount, isCredit ? styles.amountCredit : styles.amountDebit]}>
-        {isCredit ? '+' : '−'}{formatINR(transaction.amount)}
-      </Text>
+      <View style={styles.transactionTrailing}>
+        <Text style={[styles.transactionAmount, isCredit ? styles.amountCredit : styles.amountDebit]}>
+          {isCredit ? '+' : '−'}{formatINR(transaction.amount)}
+        </Text>
+        {onDelete ? (
+          <TouchableOpacity
+            onPress={onDelete}
+            style={styles.deleteButton}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${transaction.merchant}`}
+          >
+            <Trash2 size={17} color={FinanceTheme.colors.red} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </TouchableOpacity>
   );
 }
@@ -180,8 +196,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  sectionTitle: { color: FinanceTheme.colors.muted, fontSize: 13, fontWeight: '700' },
-  sectionAction: { color: FinanceTheme.colors.primarySoft, fontSize: 11, fontWeight: '700' },
+  sectionTitle: { color: FinanceTheme.colors.muted, fontSize: Typography.size.body, fontWeight: '700' },
+  sectionAction: { color: FinanceTheme.colors.primarySoft, fontSize: Typography.size.subtext, fontWeight: '700' },
   button: {
     minHeight: 48,
     borderRadius: 14,
@@ -192,13 +208,13 @@ const styles = StyleSheet.create({
   },
   secondaryButton: { backgroundColor: FinanceTheme.colors.surfaceRaised, borderWidth: 1, borderColor: FinanceTheme.colors.border },
   buttonDisabled: { opacity: 0.58 },
-  buttonText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+  buttonText: { color: '#ffffff', fontSize: Typography.size.body, fontWeight: '700' },
   pill: { alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
   pill_purple: { backgroundColor: 'rgba(128,92,255,0.16)' },
   pill_green: { backgroundColor: 'rgba(33,201,151,0.13)' },
   pill_red: { backgroundColor: 'rgba(255,99,117,0.13)' },
   pill_amber: { backgroundColor: 'rgba(245,184,75,0.13)' },
-  pillText: { fontSize: 10, fontWeight: '700' },
+  pillText: { fontSize: Typography.size.caption, fontWeight: '700' },
   pillText_purple: { color: FinanceTheme.colors.primarySoft },
   pillText_green: { color: FinanceTheme.colors.green },
   pillText_red: { color: FinanceTheme.colors.red },
@@ -217,9 +233,11 @@ const styles = StyleSheet.create({
   transactionIconText: { color: FinanceTheme.colors.primarySoft, fontSize: 17, fontWeight: '800' },
   transactionIconTextCredit: { color: FinanceTheme.colors.green },
   transactionInfo: { flex: 1, minWidth: 0 },
-  transactionName: { color: FinanceTheme.colors.text, fontSize: 13, fontWeight: '700' },
-  transactionMeta: { color: FinanceTheme.colors.subtle, fontSize: 10, marginTop: 4 },
-  transactionAmount: { fontSize: 13, fontWeight: '800', marginLeft: 2 },
+  transactionName: { color: FinanceTheme.colors.text, fontSize: Typography.size.body, fontWeight: '700' },
+  transactionMeta: { color: FinanceTheme.colors.subtle, fontSize: Typography.size.caption, marginTop: 4 },
+  transactionAmount: { fontSize: Typography.size.subtext, fontWeight: '800', marginLeft: 2 },
+  transactionTrailing: { alignItems: 'flex-end', gap: 7 },
+  deleteButton: { minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' },
   amountCredit: { color: FinanceTheme.colors.green },
   amountDebit: { color: FinanceTheme.colors.red },
   transactionDetails: { marginTop: 10, gap: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: FinanceTheme.colors.border },
@@ -227,7 +245,7 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', padding: 24, borderWidth: 1, borderColor: FinanceTheme.colors.border, borderRadius: 18, backgroundColor: FinanceTheme.colors.surface },
   emptyIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: 'rgba(128,92,255,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 11 },
   emptyIconText: { color: FinanceTheme.colors.primarySoft, fontSize: 20 },
-  emptyTitle: { color: FinanceTheme.colors.text, fontSize: 14, fontWeight: '700', textAlign: 'center' },
-  emptyDescription: { color: FinanceTheme.colors.muted, fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 6 },
+  emptyTitle: { color: FinanceTheme.colors.text, fontSize: Typography.size.body, fontWeight: '700', textAlign: 'center' },
+  emptyDescription: { color: FinanceTheme.colors.muted, fontSize: Typography.size.subtext, lineHeight: 21, textAlign: 'center', marginTop: 6 },
   emptyAction: { alignSelf: 'stretch', marginTop: 14 },
 });

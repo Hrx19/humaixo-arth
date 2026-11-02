@@ -1,16 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/auth-context';
+import { OAuthSignInButtons } from '@/components/auth/OAuthSignInButtons';
+import type {
+  OAuthCodeExchange,
+  OAuthProvider,
+} from '@/services/auth-service';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -21,7 +28,17 @@ export default function LoginScreen(): React.JSX.Element {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const { status, error: authError, signIn, signUp } = useAuth();
+  const { width } = useWindowDimensions();
+  const {
+    status,
+    error: authError,
+    signIn,
+    signUp,
+    signInWithGoogle,
+    signInWithGoogleIdToken,
+    signInWithGitHub,
+    continueAsGuest,
+  } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -29,7 +46,7 @@ export default function LoginScreen(): React.JSX.Element {
   }, [status, router]);
 
   const handleAuth = async (): Promise<void> => {
-    const normalizedEmail = email.trim();
+    const normalizedEmail = email.trim().toLowerCase();
     const normalizedName = name.trim();
 
     if (!isLogin && !normalizedName) {
@@ -48,7 +65,7 @@ export default function LoginScreen(): React.JSX.Element {
       setFormError('Password must be at least 8 characters.');
       return;
     }
-    if (!isLogin && password.length > 128) {
+    if (password.length > 128) {
       setFormError('Password must be 128 characters or fewer.');
       return;
     }
@@ -81,14 +98,49 @@ export default function LoginScreen(): React.JSX.Element {
     }
   };
 
+  const handleOAuthSignIn = useCallback(
+    async (provider: OAuthProvider, exchange: OAuthCodeExchange): Promise<void> => {
+      setFormError(null);
+      if (provider === 'google') {
+        await signInWithGoogle(exchange);
+      } else {
+        await signInWithGitHub(exchange);
+      }
+      router.replace('/');
+    },
+    [router, signInWithGitHub, signInWithGoogle],
+  );
+
+  const handleGoogleIdToken = useCallback(
+    async (idToken: string): Promise<void> => {
+      setFormError(null);
+      await signInWithGoogleIdToken(idToken);
+      router.replace('/');
+    },
+    [router, signInWithGoogleIdToken],
+  );
+
+  const handleContinueAsGuest = async (): Promise<void> => {
+    setFormError(null);
+    setIsSubmitting(true);
+    try {
+      await continueAsGuest();
+      router.replace('/');
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Could not switch to guest mode.',
+      );
+      router.replace('/');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const toggleAuthMode = (): void => {
     setFormError(null);
     setIsLogin((current) => !current);
-  };
-
-  const handleContinueAsGuest = (): void => {
-    setFormError(null);
-    router.replace('/');
   };
 
   const isBusy = isSubmitting || status === 'loading';
@@ -99,103 +151,133 @@ export default function LoginScreen(): React.JSX.Element {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      <View style={styles.card}>
-        <Text style={styles.title}>
-          {isLogin ? 'Welcome Back' : 'Create Account'}
-        </Text>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: width < 360 ? 16 : 22 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.formColumn}>
+        <View style={styles.brandMark}>
+          <Text style={styles.brandSymbol}>H</Text>
+        </View>
+        <Text style={styles.eyebrow}>HUMAIXO ARTH</Text>
+        <Text style={styles.title}>{isLogin ? 'Welcome back' : 'Create your account'}</Text>
         <Text style={styles.subtitle}>
-          {isLogin ? 'Login to Humaixo Arth' : 'Join Humaixo Arth today'}
+          {isLogin
+            ? 'Sign in to see your money clearly.'
+            : 'A clearer picture of every rupee starts here.'}
         </Text>
 
-        {!isLogin && (
+        <View style={styles.card}>
+          <OAuthSignInButtons
+            disabled={isBusy}
+            onBusyChange={setIsSubmitting}
+            onAuthenticate={handleOAuthSignIn}
+            onAuthenticateGoogleIdToken={handleGoogleIdToken}
+            onError={setFormError}
+          />
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR CONTINUE WITH EMAIL</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {!isLogin ? (
+            <TextInput
+              style={styles.input}
+              placeholder="Full name"
+              placeholderTextColor="#8190a5"
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              autoComplete="name"
+              editable={!isBusy}
+              returnKeyType="next"
+              accessibilityLabel="Full name"
+            />
+          ) : null}
+
           <TextInput
             style={styles.input}
-            placeholder="Full Name"
-            placeholderTextColor="#94a3b8"
-            value={name}
-            onChangeText={setName}
-            autoCapitalize="words"
-            autoComplete="name"
+            placeholder="Email address"
+            placeholderTextColor="#8190a5"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            textContentType="emailAddress"
             editable={!isBusy}
             returnKeyType="next"
-            accessibilityLabel="Full name"
+            accessibilityLabel="Email address"
           />
-        )}
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email Address"
-          placeholderTextColor="#94a3b8"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          textContentType="emailAddress"
-          editable={!isBusy}
-          returnKeyType="next"
-          accessibilityLabel="Email address"
-        />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#8190a5"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete={isLogin ? 'current-password' : 'new-password'}
+            textContentType={isLogin ? 'password' : 'newPassword'}
+            editable={!isBusy}
+            returnKeyType="done"
+            onSubmitEditing={() => void handleAuth()}
+            accessibilityLabel="Password"
+          />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#94a3b8"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          autoComplete={isLogin ? 'current-password' : 'new-password'}
-          textContentType={isLogin ? 'password' : 'newPassword'}
-          editable={!isBusy}
-          returnKeyType="done"
-          onSubmitEditing={() => void handleAuth()}
-          accessibilityLabel="Password"
-        />
+          {visibleError ? (
+            <Text accessibilityRole="alert" style={styles.errorText}>
+              {visibleError}
+            </Text>
+          ) : null}
 
-        {visibleError ? (
-          <Text accessibilityRole="alert" style={styles.errorText}>
-            {visibleError}
-          </Text>
-        ) : null}
+          <TouchableOpacity
+            style={[styles.primaryButton, isBusy && styles.buttonDisabled]}
+            onPress={() => void handleAuth()}
+            disabled={isBusy}
+            accessibilityRole="button"
+          >
+            {isBusy ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {isLogin ? 'Sign in' : 'Create account'}
+              </Text>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.button, isBusy && styles.buttonDisabled]}
-          onPress={() => void handleAuth()}
-          disabled={isBusy}
-          accessibilityRole="button"
-        >
-          {isBusy ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.buttonText}>{isLogin ? 'Login' : 'Sign Up'}</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={toggleAuthMode}
-          style={styles.switchContainer}
-          disabled={isBusy}
-          accessibilityRole="button"
-        >
-          <Text style={styles.switchText}>
-            {isLogin
-              ? "Don't have an account? Sign Up"
-              : 'Already have an account? Login'}
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={toggleAuthMode}
+            style={styles.switchButton}
+            disabled={isBusy}
+            accessibilityRole="button"
+          >
+            <Text style={styles.switchText}>
+              {isLogin
+                ? "New to Humaixo Arth? Create an account"
+                : 'Already have an account? Sign in'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
-          onPress={handleContinueAsGuest}
+          onPress={() => void handleContinueAsGuest()}
           style={styles.guestButton}
-          disabled={isSubmitting}
+          disabled={isBusy}
           accessibilityRole="button"
           accessibilityLabel="Continue as guest"
         >
-          <Text style={styles.guestButtonText}>Continue as Guest</Text>
+          <Text style={styles.guestButtonText}>Explore as a guest</Text>
         </TouchableOpacity>
-      </View>
+        <Text style={styles.privacyText}>
+          Your financial data stays private and belongs to your account.
+        </Text>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -203,84 +285,135 @@ export default function LoginScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#080c17',
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
-    padding: 20,
+    paddingVertical: 30,
   },
-  card: {
-    backgroundColor: '#1e293b',
-    padding: 30,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#334155',
+  formColumn: { width: '100%', maxWidth: 520, alignSelf: 'center' },
+  brandMark: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#625cf5',
+    marginBottom: 15,
   },
-  title: {
+  brandSymbol: {
     color: '#ffffff',
-    fontSize: 28,
+    fontSize: 26,
+    fontWeight: '900',
+  },
+  eyebrow: {
+    textAlign: 'center',
+    letterSpacing: 2.6,
+    color: '#a5b4fc',
+    fontSize: 10,
     fontWeight: '800',
     marginBottom: 8,
+  },
+  title: {
+    color: '#f8fafc',
+    fontSize: 29,
+    fontWeight: '800',
     textAlign: 'center',
-  },
-  subtitle: {
-    color: '#94a3b8',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 30,
-  },
-  input: {
-    backgroundColor: '#0f172a',
-    color: '#ffffff',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#475569',
-    fontSize: 15,
-  },
-  errorText: {
-    color: '#fca5a5',
-    fontSize: 13,
-    lineHeight: 19,
     marginBottom: 8,
   },
-  button: {
-    backgroundColor: '#6366f1',
-    padding: 16,
-    borderRadius: 12,
+  subtitle: {
+    color: '#9aa8bd',
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginBottom: 25,
+  },
+  card: {
+    backgroundColor: '#111827',
+    padding: 20,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#263349',
+  },
+  divider: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
-    minHeight: 54,
+    gap: 10,
+    marginVertical: 20,
+  },
+  dividerLine: {
+    height: 1,
+    flex: 1,
+    backgroundColor: '#2a3548',
+  },
+  dividerText: {
+    color: '#75849a',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  input: {
+    backgroundColor: '#0b1220',
+    color: '#f8fafc',
+    borderRadius: 13,
+    paddingHorizontal: 15,
+    height: 52,
+    marginBottom: 13,
+    borderWidth: 1,
+    borderColor: '#344258',
+    fontSize: 14,
+  },
+  errorText: {
+    color: '#fda4af',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  primaryButton: {
+    backgroundColor: '#625cf5',
+    paddingHorizontal: 16,
+    borderRadius: 13,
+    alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 52,
+    marginTop: 3,
   },
   buttonDisabled: {
     opacity: 0.65,
   },
-  buttonText: {
+  primaryButtonText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  switchContainer: {
-    marginTop: 20,
+  switchButton: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingTop: 17,
+    paddingBottom: 2,
   },
   switchText: {
-    color: '#a5b4fc',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#b7bcff',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   guestButton: {
-    marginTop: 8,
     alignItems: 'center',
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#475569',
-    borderRadius: 12,
+    paddingVertical: 15,
+    marginTop: 8,
   },
   guestButtonText: {
     color: '#cbd5e1',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  privacyText: {
+    color: '#64748b',
+    fontSize: 10,
+    lineHeight: 15,
+    textAlign: 'center',
+    paddingHorizontal: 30,
   },
 });

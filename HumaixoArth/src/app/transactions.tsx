@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/auth-context';
 import { FinanceScreen } from '@/components/finance-screen';
@@ -27,7 +27,42 @@ export default function TransactionsScreen(): React.JSX.Element {
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const deleteTransaction = async (transaction: FinanceTransaction): Promise<void> => {
+    if (!token) return;
+    try {
+      await FinanceService.deleteTransaction(token, transaction.id);
+      setTransactionSnapshot((current) => ({
+        ...current,
+        transactions: current.transactions.filter((item) => item.id !== transaction.id),
+      }));
+      await useFinanceStore.getState().refreshDashboard(token);
+    } catch (deleteError) {
+      Alert.alert(
+        'Could not delete transaction',
+        deleteError instanceof Error ? deleteError.message : 'Please try again.',
+      );
+    }
+  };
+
+  const confirmDelete = (transaction: FinanceTransaction): void => {
+    const message = `Delete ${transaction.merchant} (${formatDate(transaction.date)})?`;
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(message)) {
+        void deleteTransaction(transaction);
+      }
+      return;
+    }
+
+    Alert.alert('Delete transaction?', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void deleteTransaction(transaction) },
+    ]);
+  };
 
   useEffect(() => {
     if (isGuest || !token) return;
@@ -37,12 +72,18 @@ export default function TransactionsScreen(): React.JSX.Element {
       setLoading(true);
       setError(null);
       void FinanceService.getTransactions(token, {
+        page: 1,
         limit: 100,
         type: filter === 'all' ? undefined : filter,
         category: category === 'All' ? undefined : category,
         search: search.trim() || undefined,
       })
-        .then((result) => { if (active) setTransactionSnapshot({ token, transactions: result }); })
+        .then((result) => {
+          if (!active) return;
+          setTransactionSnapshot({ token, transactions: result });
+          setCurrentPage(1);
+          setHasMore(result.length === 100);
+        })
         .catch((requestError: unknown) => {
           if (active) setError(requestError instanceof Error ? requestError.message : 'Could not load transactions.');
         })
@@ -54,6 +95,34 @@ export default function TransactionsScreen(): React.JSX.Element {
       clearTimeout(timer);
     };
   }, [category, filter, isGuest, search, token]);
+
+  const loadMore = async (): Promise<void> => {
+    if (!token || loading || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const result = await FinanceService.getTransactions(token, {
+        page: nextPage,
+        limit: 100,
+        type: filter === 'all' ? undefined : filter,
+        category: category === 'All' ? undefined : category,
+        search: search.trim() || undefined,
+      });
+      setTransactionSnapshot((current) => ({
+        ...current,
+        transactions: [...current.transactions, ...result],
+      }));
+      setCurrentPage(nextPage);
+      setHasMore(result.length === 100);
+    } catch (requestError) {
+      Alert.alert(
+        'Could not load more transactions',
+        requestError instanceof Error ? requestError.message : 'Please try again.',
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const categories = useMemo(() => {
     const names = new Set(transactions.map((transaction) => transaction.category));
@@ -93,7 +162,7 @@ export default function TransactionsScreen(): React.JSX.Element {
           <SurfaceCard style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>LATEST TRANSACTIONS</Text>
             <Text style={styles.summaryValue}>{transactions.length}</Text>
-            <Text style={styles.summaryHint}>Showing up to 100 matching records</Text>
+            <Text style={styles.summaryHint}>Showing the latest matching records</Text>
           </SurfaceCard>
 
           <TextInput
@@ -150,12 +219,25 @@ export default function TransactionsScreen(): React.JSX.Element {
                       accountName={accounts.find((account) => account.id === transaction.accountId)?.name}
                       expanded={expandedId === transaction.id}
                       onPress={() => setExpandedId((current) => current === transaction.id ? null : transaction.id)}
+                      onDelete={() => confirmDelete(transaction)}
                     />
                   ))}
                 </SurfaceCard>
               </View>
             ))
           )}
+          {hasMore && !loading && !error ? (
+            <TouchableOpacity
+              onPress={() => void loadMore()}
+              disabled={loadingMore}
+              style={styles.loadMoreButton}
+              accessibilityRole="button"
+            >
+              {loadingMore
+                ? <ActivityIndicator color={FinanceTheme.colors.primarySoft} />
+                : <Text style={styles.loadMoreText}>Load more transactions</Text>}
+            </TouchableOpacity>
+          ) : null}
         </>
       )}
     </FinanceScreen>
@@ -196,4 +278,6 @@ const styles = StyleSheet.create({
   dayTotal: { color: FinanceTheme.colors.subtle, fontSize: 9 },
   transactionCard: { paddingHorizontal: 13, paddingVertical: 2 },
   errorText: { color: FinanceTheme.colors.red, fontSize: 11 },
+  loadMoreButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: FinanceTheme.colors.border, backgroundColor: FinanceTheme.colors.surface },
+  loadMoreText: { color: FinanceTheme.colors.primarySoft, fontSize: 14, fontWeight: '700' },
 });

@@ -6,18 +6,15 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { AuthStorage } from '@/auth/auth-storage';
-import {
-  AuthService,
-  type AuthSession,
-  type AuthUser,
-  type LoginCredentials,
-  type RegistrationDetails,
+import type {
+  AuthUser,
+  LoginCredentials,
+  RegistrationDetails,
+  AuthSession,
+  OAuthCodeExchange,
 } from '@/services/auth-service';
-
-const SESSION_STORAGE_KEY = 'humaixo.auth.session.v1';
-const LEGACY_TOKEN_KEY = 'userToken';
-const LEGACY_NAME_KEY = 'userName';
+import { AuthService } from '@/services/auth-service';
+import { useAuthStore } from '@/store/authStore';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -25,27 +22,18 @@ type AuthContextValue = {
   status: AuthStatus;
   token: string | null;
   user: AuthUser | null;
+  isGuest: boolean;
   error: string | null;
   signIn(credentials: LoginCredentials): Promise<void>;
   signUp(details: RegistrationDetails): Promise<void>;
+  signInWithGoogle(exchange: OAuthCodeExchange): Promise<void>;
+  signInWithGoogleIdToken(idToken: string): Promise<void>;
+  signInWithGitHub(exchange: OAuthCodeExchange): Promise<void>;
+  continueAsGuest(): Promise<void>;
   signOut(): Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-function isAuthSession(value: unknown): value is AuthSession {
-  if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as Partial<AuthSession>;
-  return (
-    typeof candidate.token === 'string' &&
-    candidate.token.trim().length > 0 &&
-    ((typeof candidate.user?.id === 'string' && candidate.user.id.trim().length > 0) ||
-      candidate.user?.id === null) &&
-    typeof candidate.user.name === 'string' &&
-    candidate.user.name.trim().length > 0 &&
-    typeof candidate.user.email === 'string'
-  );
-}
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error
@@ -53,140 +41,136 @@ function getErrorMessage(error: unknown): string {
     : 'An unexpected authentication error occurred.';
 }
 
-async function persistSession(session: AuthSession): Promise<void> {
-  await AuthStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-
-  await Promise.allSettled([
-    AuthStorage.removeItem(LEGACY_TOKEN_KEY),
-    AuthStorage.removeItem(LEGACY_NAME_KEY),
-  ]);
-}
-
-async function restoreSession(): Promise<AuthSession | null> {
-  const storedSession = await AuthStorage.getItem(SESSION_STORAGE_KEY);
-  if (storedSession) {
-    try {
-      const parsed: unknown = JSON.parse(storedSession);
-      if (isAuthSession(parsed)) return parsed;
-    } catch {
-      // A damaged session is cleared below and the legacy keys are checked once.
-    }
-
-    await AuthStorage.removeItem(SESSION_STORAGE_KEY);
-  }
-
-  // Migrate sessions created by the earlier login screen without dropping users.
-  const [legacyToken, legacyName] = await Promise.all([
-    AuthStorage.getItem(LEGACY_TOKEN_KEY),
-    AuthStorage.getItem(LEGACY_NAME_KEY),
-  ]);
-
-  if (!legacyToken?.trim()) return null;
-
-  const migratedSession: AuthSession = {
-    token: legacyToken,
-    user: {
-      id: null,
-      name: legacyName?.trim() || 'User',
-      email: '',
-    },
-  };
-
-  await persistSession(migratedSession);
-  return migratedSession;
-}
-
 export function AuthProvider({ children }: React.PropsWithChildren): React.JSX.Element {
-  const [status, setStatus] = useState<AuthStatus>('loading');
-  const [session, setSession] = useState<AuthSession | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
+  const isGuest = useAuthStore((state) => state.isGuest);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const storageError = useAuthStore((state) => state.storageError);
+  const checkAuth = useAuthStore((state) => state.checkAuth);
+  const persistLogin = useAuthStore((state) => state.login);
+  const clearLogin = useAuthStore((state) => state.logout);
+  const clearToGuest = useAuthStore((state) => state.setGuestMode);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
+    void checkAuth();
+  }, [checkAuth]);
 
-    void restoreSession()
-      .then((restoredSession) => {
-        if (!isMounted) return;
-        setSession(restoredSession);
-        setStatus(restoredSession ? 'authenticated' : 'unauthenticated');
-      })
-      .catch((restoreError: unknown) => {
-        if (!isMounted) return;
-        setSession(null);
-        setError(getErrorMessage(restoreError));
-        setStatus('unauthenticated');
-      });
+  const finishAuthentication = useCallback(
+    async (request: Promise<AuthSession>): Promise<void> => {
+      setIsAuthenticating(true);
+      setRequestError(null);
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const finishAuthentication = useCallback(async (nextSession: AuthSession) => {
-    setError(null);
-    await persistSession(nextSession);
-    setSession(nextSession);
-    setStatus('authenticated');
-  }, []);
+      try {
+        const session = await request;
+        await persistLogin(session.user, session.token);
+      } catch (error) {
+        const message = getErrorMessage(error);
+        setRequestError(message);
+        throw new Error(message);
+      } finally {
+        setIsAuthenticating(false);
+      }
+    },
+    [persistLogin],
+  );
 
   const signIn = useCallback(
-    async (credentials: LoginCredentials) => {
-      setError(null);
-      try {
-        const nextSession = await AuthService.login(credentials);
-        await finishAuthentication(nextSession);
-      } catch (authError) {
-        const message = getErrorMessage(authError);
-        setError(message);
-        throw new Error(message);
-      }
+    async (credentials: LoginCredentials): Promise<void> => {
+      await finishAuthentication(AuthService.login(credentials));
     },
     [finishAuthentication],
   );
 
   const signUp = useCallback(
-    async (details: RegistrationDetails) => {
-      setError(null);
-      try {
-        const nextSession = await AuthService.register(details);
-        await finishAuthentication(nextSession);
-      } catch (authError) {
-        const message = getErrorMessage(authError);
-        setError(message);
-        throw new Error(message);
-      }
+    async (details: RegistrationDetails): Promise<void> => {
+      await finishAuthentication(AuthService.register(details));
     },
     [finishAuthentication],
   );
 
-  const signOut = useCallback(async () => {
-    setError(null);
+  const signInWithGoogle = useCallback(
+    async (exchange: OAuthCodeExchange): Promise<void> => {
+      await finishAuthentication(AuthService.signInWithGoogle(exchange));
+    },
+    [finishAuthentication],
+  );
+
+  const signInWithGoogleIdToken = useCallback(
+    async (idToken: string): Promise<void> => {
+      await finishAuthentication(AuthService.signInWithGoogleIdToken(idToken));
+    },
+    [finishAuthentication],
+  );
+
+  const signInWithGitHub = useCallback(
+    async (exchange: OAuthCodeExchange): Promise<void> => {
+      await finishAuthentication(AuthService.signInWithGitHub(exchange));
+    },
+    [finishAuthentication],
+  );
+
+  const continueAsGuest = useCallback(async (): Promise<void> => {
+    setRequestError(null);
     try {
-      await AuthStorage.removeItem(SESSION_STORAGE_KEY);
-      await Promise.allSettled([
-        AuthStorage.removeItem(LEGACY_TOKEN_KEY),
-        AuthStorage.removeItem(LEGACY_NAME_KEY),
-      ]);
-      setSession(null);
-      setStatus('unauthenticated');
-    } catch (storageError) {
-      const message = getErrorMessage(storageError);
-      setError(message);
+      await clearToGuest();
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setRequestError(message);
       throw new Error(message);
     }
-  }, []);
+  }, [clearToGuest]);
+
+  const signOut = useCallback(async (): Promise<void> => {
+    setRequestError(null);
+
+    try {
+      await clearLogin();
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setRequestError(message);
+      throw new Error(message);
+    }
+  }, [clearLogin]);
+
+  const status: AuthStatus = isLoading || isAuthenticating
+    ? 'loading'
+    : token
+      ? 'authenticated'
+      : 'unauthenticated';
 
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
-      token: session?.token ?? null,
-      user: session?.user ?? null,
-      error,
+      token,
+      user,
+      isGuest,
+      error: requestError ?? storageError,
       signIn,
       signUp,
+      signInWithGoogle,
+      signInWithGoogleIdToken,
+      signInWithGitHub,
+      continueAsGuest,
       signOut,
     }),
-    [status, session, error, signIn, signUp, signOut],
+    [
+      status,
+      token,
+      user,
+      isGuest,
+      requestError,
+      storageError,
+      signIn,
+      signUp,
+      signInWithGoogle,
+      signInWithGoogleIdToken,
+      signInWithGitHub,
+      continueAsGuest,
+      signOut,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
