@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "HumaixoArth",
+    "name": "Humaixo",
     "slug": "HumaixoArth",
     "scheme": "humaixoarth",
     "version": "1.0.0",
@@ -33,6 +33,16 @@
     "plugins": [
       "expo-router",
       "@react-native-google-signin/google-signin"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "2a3ddc81-cde6-47df-9a47-c1fd6692f35a"
+      }
+    }
   }
 }

@@ -30,7 +30,22 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 
     initialization = (async () => {
       try {
-        const savedMode = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+        let savedMode: string | null;
+        if (Platform.OS === 'web') {
+          savedMode =
+            typeof window !== 'undefined'
+              ? window.localStorage.getItem(THEME_STORAGE_KEY)
+              : null;
+        } else {
+          try {
+            savedMode = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+          } catch {
+            savedMode =
+              typeof window !== 'undefined'
+                ? window.localStorage.getItem(THEME_STORAGE_KEY)
+                : null;
+          }
+        }
         const mode: ThemeMode = savedMode === 'light' ? 'light' : 'dark';
         updateNativeAppearance(mode);
         set({ mode });
@@ -44,7 +59,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
 
   async setMode(mode: ThemeMode): Promise<void> {
-    await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
+    try {
+      await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
+    } catch (error) {
+      if (typeof window === 'undefined') throw error;
+      window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+    }
     updateNativeAppearance(mode);
     set({ mode, hydrated: true });
   },
