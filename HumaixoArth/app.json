@@ -24,15 +24,17 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundColor": "#0f172a"
       },
-      "package": "com.humaixo.arth"
+      "package": "com.humaixo.arth",
+      "permissions": [
+        "INTERNET"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png",
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router",
-      "@react-native-google-signin/google-signin"
+      "expo-router"
     ],
     "extra": {
       "router": {
@@ -43,6 +45,12 @@
       "eas": {
         "projectId": "2a3ddc81-cde6-47df-9a47-c1fd6692f35a"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2a3ddc81-cde6-47df-9a47-c1fd6692f35a"
     }
   }
 }

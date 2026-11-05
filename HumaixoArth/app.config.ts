@@ -14,6 +14,7 @@ function getGoogleIosUrlScheme(): string | null {
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const iosUrlScheme = getGoogleIosUrlScheme();
+  const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
   const googleSignInPlugin = '@react-native-google-signin/google-signin';
   const plugins = (config.plugins ?? []).filter((plugin) => {
     const pluginName = typeof plugin === 'string' ? plugin : plugin[0];
@@ -29,7 +30,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   if (iosUrlScheme) {
     plugins.push([
       googleSignInPlugin,
-      { iosUrlScheme },
+      {
+        iosUrlScheme,
+        // Kept in the resolved Expo config so the Web client used at runtime
+        // is visible alongside the native plugin configuration. Version 17 of
+        // this plugin uses iosUrlScheme; Android receives this Web ID through
+        // GoogleSignin.configure in the app code.
+        webClientId: googleWebClientId,
+      },
     ]);
   }
 
@@ -39,5 +47,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     slug: config.slug ?? 'humaixoarth',
     version: config.version ?? '1.0.0',
     plugins,
+    extra: {
+      ...config.extra,
+      googleSignIn: {
+        webClientId: googleWebClientId,
+      },
+    },
   };
 };
