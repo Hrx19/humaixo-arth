@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "23a12ec3-38ce-4804-890c-197b58480871"
+      }
+    },
+    "android": {
+      "package": "com.humaixoarth.humaixoarth"
+    }
+  }
+}
