@@ -3,6 +3,7 @@ import '../global.css';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/auth/auth-context';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
@@ -58,37 +59,40 @@ export default function RootLayout(): React.JSX.Element {
   }, [initializeTheme, splashOpacity]);
 
   return (
-    <ErrorBoundary>
-      <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
-            {splashVisible ? (
-              <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, splashStyle]}>
-                <LinearGradient
-                  colors={['#241850', '#111329', '#090910']}
-                  locations={[0, 0.58, 1]}
-                  style={styles.splash}
-                >
-                  <Animated.View entering={FadeInDown.duration(700).delay(120)} style={styles.brand}>
-                    <View style={styles.logoMark}>
-                      <Text style={styles.logoText}>H</Text>
-                    </View>
-                    <Text style={styles.brandName}>Humaixo Arth</Text>
-                    <Text style={styles.tagline}>Your money, clearly understood.</Text>
-                  </Animated.View>
-                  <Text style={styles.footer}>PRIVATE FINANCE · MADE SIMPLE</Text>
-                </LinearGradient>
-              </Animated.View>
-            ) : null}
-          </AuthProvider>
-        </QueryClientProvider>
-      </SafeAreaProvider>
-    </ErrorBoundary>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <ErrorBoundary>
+        <SafeAreaProvider>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+              {splashVisible ? (
+                <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, splashStyle]}>
+                  <LinearGradient
+                    colors={['#241850', '#111329', '#090910']}
+                    locations={[0, 0.58, 1]}
+                    style={styles.splash}
+                  >
+                    <Animated.View entering={FadeInDown.duration(700).delay(120)} style={styles.brand}>
+                      <View style={styles.logoMark}>
+                        <Text style={styles.logoText}>H</Text>
+                      </View>
+                      <Text style={styles.brandName}>Humaixo Arth</Text>
+                      <Text style={styles.tagline}>Your money, clearly understood.</Text>
+                    </Animated.View>
+                    <Text style={styles.footer}>PRIVATE FINANCE · MADE SIMPLE</Text>
+                  </LinearGradient>
+                </Animated.View>
+              ) : null}
+            </AuthProvider>
+          </QueryClientProvider>
+        </SafeAreaProvider>
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: { flex: 1 },
   splash: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   brand: { alignItems: 'center', gap: 12 },
   logoMark: {

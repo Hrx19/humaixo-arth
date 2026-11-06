@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { ArrowLeftRight, Briefcase, CreditCard, Home, MoreHorizontal, RefreshCw, Wallet } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFinanceColors } from '@/constants/finance-theme';
 
 export default function MainTabsLayout(): React.JSX.Element {
@@ -27,56 +27,56 @@ export default function MainTabsLayout(): React.JSX.Element {
         name="index"
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={String(color)} size={size} />,
         }}
       />
       <Tabs.Screen
         name="transactions"
         options={{
           title: 'Activity',
-          tabBarIcon: ({ color, size }) => <CreditCard color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="receipt-outline" color={String(color)} size={size} />,
         }}
       />
       <Tabs.Screen
-        name="accounts"
+        name="accounts/index"
         options={{
           title: 'Accounts',
-          tabBarIcon: ({ color, size }) => <Wallet color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" color={String(color)} size={size} />,
         }}
       />
       <Tabs.Screen
         name="budgets"
         options={{
           title: 'Budgets',
-          tabBarIcon: ({ color, size }) => <Wallet color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="pie-chart-outline" color={String(color)} size={size} />,
         }}
       />
       <Tabs.Screen
         name="loans"
         options={{
           title: 'Loans',
-          tabBarIcon: ({ color, size }) => <Briefcase color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="briefcase-outline" color={String(color)} size={size} />,
         }}
       />
       <Tabs.Screen
         name="recurring"
         options={{
           title: 'Recurring',
-          tabBarIcon: ({ color, size }) => <RefreshCw color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="refresh-outline" color={String(color)} size={size} />,
         }}
       />
       <Tabs.Screen
         name="transfers"
         options={{
           title: 'Transfers',
-          tabBarIcon: ({ color, size }) => <ArrowLeftRight color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="swap-horizontal-outline" color={String(color)} size={size} />,
         }}
       />
       <Tabs.Screen
         name="money-tools"
         options={{
           title: 'More',
-          tabBarIcon: ({ color, size }) => <MoreHorizontal color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="ellipsis-horizontal" color={String(color)} size={size} />,
         }}
       />
       <Tabs.Screen name="people" options={{ href: null }} />
@@ -86,6 +86,8 @@ export default function MainTabsLayout(): React.JSX.Element {
       <Tabs.Screen name="transactions/[id]" options={{ href: null }} />
       <Tabs.Screen name="statements/upload" options={{ href: null }} />
       <Tabs.Screen name="statements/review/[statementId]" options={{ href: null }} />
+      <Tabs.Screen name="ai-assistant" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
     </Tabs>
   );
 }
