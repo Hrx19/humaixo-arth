@@ -142,13 +142,13 @@ function getGoogleNativeErrorMessage(error: unknown): string {
     }
     if (code === 'IN_PROGRESS') return 'Google sign-in is already in progress.';
     if (code === 'DEVELOPER_ERROR' || code === 10) {
-      return 'Google rejected this Android build. Verify the package name, signing SHA-1, and Web client ID in Google Cloud.';
+      return 'Google rejected this Android build. Verify the Android OAuth client package name and signing SHA-1, and confirm the configured client ID is a Web application client.';
     }
   }
 
   if (error instanceof Error && error.message.trim()) {
     if (/DEVELOPER_ERROR|code\s*10|developer console/i.test(error.message)) {
-      return 'Google rejected this Android build. Verify the package name, signing SHA-1, and Web client ID in Google Cloud.';
+      return 'Google rejected this Android build. Verify the Android OAuth client package name and signing SHA-1, and confirm the configured client ID is a Web application client.';
     }
     if (/native module|RNGoogleSignin|TurboModule/i.test(error.message)) {
       return 'Google sign-in on Android/iOS needs the Humaixo Arth development build. Email login still works in Expo Go.';
@@ -193,6 +193,12 @@ function NativeGoogleButton({
 
     setIsWorking(true);
     onBusyChange(true);
+    let stage:
+      | 'configuration'
+      | 'play_services'
+      | 'native_sign_in'
+      | 'token_validation'
+      | 'backend_authentication' = 'configuration';
     try {
       if (!webClientId) {
         throw new Error('Google sign-in is not configured. Add the Web client ID first.');
@@ -205,22 +211,34 @@ function NativeGoogleButton({
         ...(Platform.OS === 'ios' && iosClientId ? { iosClientId } : {}),
       });
 
-      // configure() starts native async setup; signIn() awaits that setup internally.
-      // Check Play Services before starting the sign-in flow on Android.
       if (Platform.OS === 'android') {
+        stage = 'play_services';
         await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       }
 
+      stage = 'native_sign_in';
       const result = await GoogleSignin.signIn();
       if (result.type === 'cancelled') return;
 
+      stage = 'token_validation';
       const idToken = result.data.idToken?.trim();
       if (!idToken) {
         throw new Error('Google did not return an ID token. Check the Web OAuth client ID.');
       }
 
+      stage = 'backend_authentication';
       await onAuthenticate(idToken);
     } catch (error) {
+      const errorCode =
+        typeof error === 'object' && error !== null && 'code' in error
+          && (typeof error.code === 'string' || typeof error.code === 'number')
+          ? error.code
+          : undefined;
+      console.error('[Google Sign-In] Failed', {
+        stage,
+        code: errorCode,
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
       onError(getGoogleNativeErrorMessage(error));
     } finally {
       setIsWorking(false);

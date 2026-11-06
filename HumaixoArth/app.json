@@ -35,7 +35,12 @@
     },
     "plugins": [
       "expo-router",
-      "@react-native-google-signin/google-signin"
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "webClientId": "397230187208-35sfgane1q8nh4gei1d76t74h1nsgegc.apps.googleusercontent.com"
+        }
+      ]
     ],
     "extra": {
       "router": {
