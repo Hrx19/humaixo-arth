@@ -185,3 +185,40 @@ export async function getLoanBalance(userId: Types.ObjectId, loanId: Types.Objec
     })),
   };
 }
+
+export async function listLoans(userId: Types.ObjectId) {
+  const loans = await LoanModel.find({ userId }).sort({ startDate: -1, _id: -1 }).lean();
+  const people = loans.length
+    ? await PersonModel.find({
+      userId,
+      _id: { $in: [...new Set(loans.map((loan) => loan.personId.toString()))].map((id) => new Types.ObjectId(id)) },
+    }).select('_id displayName').lean()
+    : [];
+  const personNames = new Map(people.map((person) => [person._id.toString(), person.displayName]));
+
+  return loans.map((loan) => {
+    const principal = new Decimal(loan.principal.toString());
+    const repaid = loan.repayments.reduce(
+      (total, repayment) => total.plus(repayment.amount.toString()),
+      new Decimal(0),
+    );
+    return {
+      id: loan._id.toString(),
+      personId: loan.personId.toString(),
+      personName: personNames.get(loan.personId.toString()) ?? null,
+      direction: loan.direction,
+      principal: principal.toString(),
+      repaidAmount: repaid.toString(),
+      outstandingPrincipal: Decimal.max(0, principal.minus(repaid)).toString(),
+      interestRate: loan.interestRate ?? null,
+      startDate: loan.startDate.toISOString(),
+      status: loan.status,
+      repayments: loan.repayments.map((repayment) => ({
+        transactionId: repayment.transactionId.toString(),
+        amount: repayment.amount.toString(),
+        date: repayment.date.toISOString(),
+        note: repayment.note ?? null,
+      })),
+    };
+  });
+}

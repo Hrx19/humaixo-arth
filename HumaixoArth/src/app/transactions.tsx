@@ -251,6 +251,11 @@ function TransactionCard({
         <Text numberOfLines={1} style={[styles.merchant, { color: colors.text }]}>{item.counterparty || item.merchant || 'Unknown counterparty'}</Text>
         <Text numberOfLines={2} style={[styles.description, { color: colors.muted }]}>{item.description || item.merchant || 'No description supplied'}</Text>
         <Text style={[styles.transactionMeta, { color: colors.subtle }]}>{item.date ? new Date(item.date).toLocaleDateString('en-IN') : 'Date unavailable'} · {item.category} · {item.source === 'statement' ? 'Imported from statement' : item.source === 'sms' ? 'From SMS' : 'User entered'}</Text>
+        {item.isInternalTransfer ? (
+          <View style={[styles.transferTag, { backgroundColor: `${colors.primary}1b` }]}>
+            <Text style={[styles.transferTagText, { color: colors.primarySoft }]}>Internal transfer</Text>
+          </View>
+        ) : null}
       </View>
       <Text style={[styles.amount, { color: isCredit ? colors.green : colors.red }]}>{isCredit ? '+' : '−'}{formatDecimalINR(item.amount)}</Text>
     </TouchableOpacity>
@@ -299,6 +304,8 @@ const styles = StyleSheet.create({
   description: { fontSize: 12, lineHeight: 17 },
   transactionMeta: { fontSize: 10, lineHeight: 14 },
   amount: { fontSize: 13, fontWeight: '800', textAlign: 'right', flexShrink: 0 },
+  transferTag: { alignSelf: 'flex-start', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 4, marginTop: 2 },
+  transferTagText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
   emptyText: { fontSize: 13, lineHeight: 20, paddingVertical: 24, textAlign: 'center' },
   centered: { marginVertical: 30 },
   footerLoader: { marginVertical: 16 },

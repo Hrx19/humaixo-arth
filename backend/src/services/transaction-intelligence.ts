@@ -106,6 +106,8 @@ export async function listTransactions(filters: TransactionFilters) {
               confidence: { $ifNull: ['$confidence', 1] },
               description: { $ifNull: ['$description', null] },
               transactionTime: { $ifNull: ['$transactionTime', null] },
+              isInternalTransfer: { $eq: ['$isInternalTransfer', true] },
+              isLoanRepayment: { $eq: ['$isLoanRepayment', true] },
             },
           },
         ],

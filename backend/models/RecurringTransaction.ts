@@ -8,7 +8,7 @@ import {
 } from 'mongoose';
 
 export type RecurrenceInterval = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
-export type RecurringTransactionStatus = 'confirmed' | 'paused';
+export type RecurringTransactionStatus = 'confirmed' | 'paused' | 'dismissed';
 export type RecurringTransactionDirection = 'credit' | 'debit';
 
 export interface RecurringTransactionRecord {
@@ -59,7 +59,7 @@ const recurringTransactionSchema = new Schema<RecurringTransactionRecord>(
     lastOccurrence: { type: Date, required: true },
     nextExpectedDate: { type: Date, required: true },
     sourceTransactionIds: [{ type: Schema.Types.ObjectId, ref: 'Transaction', required: true }],
-    status: { type: String, enum: ['confirmed', 'paused'], default: 'confirmed', required: true },
+    status: { type: String, enum: ['confirmed', 'paused', 'dismissed'], default: 'confirmed', required: true },
     confirmedAt: { type: Date, required: true, default: Date.now },
   },
   { timestamps: true },

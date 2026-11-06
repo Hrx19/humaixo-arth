@@ -4,6 +4,7 @@ import { Types } from 'mongoose';
 import {
   RecurringTransactionModel,
   type RecurrenceInterval,
+  type RecurringTransactionDirection,
 } from '../../models/RecurringTransaction';
 import { TransactionModel } from '../../models/Transaction';
 
@@ -285,31 +286,46 @@ export async function detectRecurringPatterns(userId: Types.ObjectId): Promise<D
     .sort((left, right) => right.confidence - left.confidence || left.nextExpectedDate.localeCompare(right.nextExpectedDate));
 }
 
-export async function confirmRecurringPattern(userId: Types.ObjectId, patternKey: string) {
-  const pattern = (await detectRecurringPatterns(userId))
-    .find((candidate) => candidate.patternKey === patternKey);
-  if (!pattern) return null;
+type RecurringPatternOverrides = {
+  amount?: string;
+  nextExpectedDate?: Date;
+};
 
-  const setOnInsert = {
-    userId,
+function recurringRecord(pattern: DetectedPattern, status: 'confirmed' | 'dismissed', overrides: RecurringPatternOverrides = {}) {
+  return {
     ...pattern,
     accountId: new Types.ObjectId(pattern.accountId),
-    amount: Types.Decimal128.fromString(pattern.amount),
+    amount: Types.Decimal128.fromString(overrides.amount ?? pattern.amount),
     minAmount: Types.Decimal128.fromString(pattern.minAmount),
     maxAmount: Types.Decimal128.fromString(pattern.maxAmount),
     firstOccurrence: new Date(pattern.firstOccurrence),
     lastOccurrence: new Date(pattern.lastOccurrence),
-    nextExpectedDate: new Date(pattern.nextExpectedDate),
+    nextExpectedDate: overrides.nextExpectedDate ?? new Date(pattern.nextExpectedDate),
     sourceTransactionIds: pattern.sourceTransactionIds.map((id) => new Types.ObjectId(id)),
-    status: 'confirmed' as const,
+    status,
     confirmedAt: new Date(),
   };
-  const recurring = await RecurringTransactionModel.findOneAndUpdate(
-    { userId, patternKey },
-    { $setOnInsert: setOnInsert },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
+}
 
+function serializeRecurringRecord(recurring: {
+  _id: Types.ObjectId;
+  patternKey: string;
+  accountId: Types.ObjectId;
+  counterparty: string;
+  description: string;
+  direction: RecurringTransactionDirection;
+  amount: Types.Decimal128;
+  minAmount: Types.Decimal128;
+  maxAmount: Types.Decimal128;
+  interval: RecurrenceInterval;
+  confidence: number;
+  occurrenceCount: number;
+  firstOccurrence: Date;
+  lastOccurrence: Date;
+  nextExpectedDate: Date;
+  status: string;
+  confirmedAt: Date;
+}) {
   return {
     id: recurring._id.toString(),
     patternKey: recurring.patternKey,
@@ -329,4 +345,39 @@ export async function confirmRecurringPattern(userId: Types.ObjectId, patternKey
     status: recurring.status,
     confirmedAt: recurring.confirmedAt.toISOString(),
   };
+}
+
+async function saveRecurringPattern(
+  userId: Types.ObjectId,
+  patternKey: string,
+  status: 'confirmed' | 'dismissed',
+  overrides: RecurringPatternOverrides = {},
+) {
+  const pattern = (await detectRecurringPatterns(userId))
+    .find((candidate) => candidate.patternKey === patternKey);
+  if (!pattern) return null;
+
+  const setOnInsert = {
+    userId,
+    ...recurringRecord(pattern, status, overrides),
+  };
+  const recurring = await RecurringTransactionModel.findOneAndUpdate(
+    { userId, patternKey },
+    { $setOnInsert: setOnInsert },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
+
+  return serializeRecurringRecord(recurring);
+}
+
+export async function confirmRecurringPattern(
+  userId: Types.ObjectId,
+  patternKey: string,
+  overrides: RecurringPatternOverrides = {},
+) {
+  return saveRecurringPattern(userId, patternKey, 'confirmed', overrides);
+}
+
+export async function dismissRecurringPattern(userId: Types.ObjectId, patternKey: string) {
+  return saveRecurringPattern(userId, patternKey, 'dismissed');
 }

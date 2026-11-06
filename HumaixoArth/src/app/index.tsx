@@ -175,6 +175,9 @@ function RecentTransaction({
         <Text numberOfLines={1} style={[styles.recentMeta, { color: colors.muted }]}>
           {transaction.date ? new Date(transaction.date).toLocaleDateString('en-IN') : 'Date unavailable'} · {transaction.source === 'statement' ? 'Imported from statement' : transaction.source === 'sms' ? 'From SMS' : 'User entered'}
         </Text>
+        {transaction.isInternalTransfer ? (
+          <Text style={[styles.transferTag, { color: colors.primarySoft }]}>Internal transfer</Text>
+        ) : null}
       </View>
       <Text style={[styles.recentAmount, { color: credit ? colors.green : colors.red }]}>{credit ? '+' : '−'}{formatDecimalINR(transaction.amount)}</Text>
     </TouchableOpacity>
@@ -231,6 +234,7 @@ const styles = StyleSheet.create({
   recentCopy: { flex: 1, gap: 5 },
   recentName: { fontSize: 13, fontWeight: '800' },
   recentMeta: { fontSize: 10 },
+  transferTag: { fontSize: 9, fontWeight: '800', marginTop: 3 },
   recentAmount: { fontSize: 13, fontWeight: '900' },
   emptyCard: { padding: 20, borderRadius: 17, borderWidth: 1, gap: 12 },
   emptyTitle: { fontSize: 16, fontWeight: '900' },

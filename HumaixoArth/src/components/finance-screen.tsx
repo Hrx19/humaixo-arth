@@ -17,7 +17,7 @@ import { FinanceTheme, useFinanceColors } from '@/constants/finance-theme';
 import { Typography } from '@/theme/typography';
 import { useThemeStore } from '@/store/themeStore';
 
-export type FinanceTab = 'home' | 'transactions' | 'people' | 'history' | 'insights';
+export type FinanceTab = 'home' | 'transactions' | 'people' | 'history' | 'insights' | 'tools';
 
 type FinanceScreenProps = {
   title: string;
@@ -35,6 +35,7 @@ const NAV_ITEMS: { key: FinanceTab; label: string; icon: string; route: Href }[]
   { key: 'people', label: 'People', icon: '\u2659', route: '/people' },
   { key: 'history', label: 'History', icon: '\u25f7', route: '/history' },
   { key: 'insights', label: 'Insights', icon: '\u2726', route: '/insights' },
+  { key: 'tools', label: 'Tools', icon: '\u2699', route: '/money-tools' },
 ];
 
 export function FinanceScreen({

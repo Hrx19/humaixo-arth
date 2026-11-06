@@ -19,6 +19,8 @@ export type TransactionListItem = {
   confidence: number;
   description: string | null;
   transactionTime: string | null;
+  isInternalTransfer: boolean;
+  isLoanRepayment: boolean;
 };
 
 export type TransactionPage = {

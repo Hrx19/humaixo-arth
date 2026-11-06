@@ -6,6 +6,7 @@ import { logger } from '../config/logger';
 import {
   createLoan,
   getLoanBalance,
+  listLoans,
   LoanLedgerError,
   recordLoanRepayment,
 } from '../services/loan-ledger';
@@ -119,5 +120,19 @@ export async function getUserLoanBalance(request: Request, response: Response): 
       stack: error instanceof Error ? error.stack : undefined,
     });
     return response.status(500).json({ success: false, error: 'Could not calculate loan balance.' });
+  }
+}
+
+export async function listUserLoans(request: Request, response: Response): Promise<Response> {
+  const userId = getUserId(request);
+  if (!userId) return response.status(401).json({ success: false, error: 'Authentication is required.' });
+  try {
+    return response.status(200).json({ success: true, data: await listLoans(userId) });
+  } catch (error) {
+    logger.error('Loan list request failed.', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return response.status(500).json({ success: false, error: 'Could not load loans.' });
   }
 }

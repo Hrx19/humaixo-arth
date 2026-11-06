@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import Decimal from 'decimal.js';
 import { Types } from 'mongoose';
 import { z } from 'zod';
 import { RecurringTransactionModel } from '../../models/RecurringTransaction';
@@ -6,9 +7,25 @@ import { logger } from '../config/logger';
 import {
   confirmRecurringPattern,
   detectRecurringPatterns,
+  dismissRecurringPattern,
 } from '../services/recurring-transaction-intelligence';
 
+const moneySchema = z.string()
+  .regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/)
+  .refine((value) => {
+    try {
+      Types.Decimal128.fromString(value);
+      return new Decimal(value).isPositive();
+    } catch {
+      return false;
+    }
+  });
 const confirmSchema = z.object({
+  patternKey: z.string().regex(/^[a-f\d]{64}$/i),
+  amount: moneySchema.optional(),
+  nextExpectedDate: z.coerce.date().optional(),
+}).strict();
+const dismissSchema = z.object({
   patternKey: z.string().regex(/^[a-f\d]{64}$/i),
 }).strict();
 
@@ -72,7 +89,10 @@ export async function confirmDetectedRecurringPattern(
       });
     }
 
-    const data = await confirmRecurringPattern(userId, parsed.data.patternKey);
+    const data = await confirmRecurringPattern(userId, parsed.data.patternKey, {
+      ...(parsed.data.amount ? { amount: parsed.data.amount } : {}),
+      ...(parsed.data.nextExpectedDate ? { nextExpectedDate: parsed.data.nextExpectedDate } : {}),
+    });
     if (!data) return response.status(404).json({ success: false, error: 'Detected pattern was not found or is no longer valid.' });
     return response.status(201).json({ success: true, data: { ...data, alreadyConfirmed: false } });
   } catch (error) {
@@ -105,5 +125,36 @@ export async function confirmDetectedRecurringPattern(
       stack: error instanceof Error ? error.stack : undefined,
     });
     return response.status(500).json({ success: false, error: 'Could not confirm the recurring transaction.' });
+  }
+}
+
+export async function dismissDetectedRecurringPattern(
+  request: Request,
+  response: Response,
+): Promise<Response> {
+  const userId = getUserId(request);
+  if (!userId) return response.status(401).json({ success: false, error: 'Authentication is required.' });
+  const parsed = dismissSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return response.status(400).json({
+      success: false,
+      error: 'A valid detected pattern key is required.',
+      details: parsed.error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      })),
+    });
+  }
+  try {
+    const data = await dismissRecurringPattern(userId, parsed.data.patternKey);
+    return data
+      ? response.status(201).json({ success: true, data })
+      : response.status(404).json({ success: false, error: 'Detected pattern was not found or is no longer valid.' });
+  } catch (error) {
+    logger.error('Recurring transaction dismissal failed.', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return response.status(500).json({ success: false, error: 'Could not dismiss the recurring transaction.' });
   }
 }
