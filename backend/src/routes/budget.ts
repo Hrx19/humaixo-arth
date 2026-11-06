@@ -32,6 +32,8 @@ async function getMonthlyExpense(userId: Types.ObjectId, year: number, month: nu
         userId,
         type: 'debit',
         date: { $gte: start, $lt: end },
+        isInternalTransfer: { $ne: true },
+        isLoanRepayment: { $ne: true },
       },
     },
     {

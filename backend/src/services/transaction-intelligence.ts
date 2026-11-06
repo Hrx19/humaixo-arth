@@ -144,7 +144,14 @@ export async function searchTransactions(
 
 export async function getDashboardSummary(userId: Types.ObjectId, from: Date, to: Date) {
   const transactionTotalsPipeline: PipelineStage[] = [
-    { $match: { userId, date: { $gte: from, $lte: to } } },
+    {
+      $match: {
+        userId,
+        date: { $gte: from, $lte: to },
+        isInternalTransfer: { $ne: true },
+        isLoanRepayment: { $ne: true },
+      },
+    },
     {
       $group: {
         _id: null,

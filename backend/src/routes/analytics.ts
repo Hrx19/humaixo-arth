@@ -32,7 +32,11 @@ analyticsRouter.get('/summary', async (request, response) => {
 
   try {
     const totals = await TransactionModel.aggregate<TypeTotal>([
-      { $match: { userId: userObjectId(userId) } },
+      { $match: {
+        userId: userObjectId(userId),
+        isInternalTransfer: { $ne: true },
+        isLoanRepayment: { $ne: true },
+      } },
       { $group: { _id: '$type', amount: { $sum: { $convert: { input: '$amount', to: 'decimal' } } } } },
     ]);
     const income = totals.find((item) => item._id === 'credit')?.amount.toString() ?? '0';
@@ -62,7 +66,12 @@ analyticsRouter.get('/category-breakdown', async (request, response) => {
 
   try {
     const categories = await TransactionModel.aggregate<CategoryTotal>([
-      { $match: { userId: userObjectId(userId), type: 'debit' } },
+      { $match: {
+        userId: userObjectId(userId),
+        type: 'debit',
+        isInternalTransfer: { $ne: true },
+        isLoanRepayment: { $ne: true },
+      } },
       {
         $group: {
           _id: '$category',
@@ -115,6 +124,8 @@ analyticsRouter.get('/monthly-trend', async (request, response) => {
         $match: {
           userId: userObjectId(userId),
           date: { $gte: startDate, $lte: now },
+          isInternalTransfer: { $ne: true },
+          isLoanRepayment: { $ne: true },
         },
       },
       {

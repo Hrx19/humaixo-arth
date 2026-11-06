@@ -5,3 +5,4 @@ if (require.main === module) {
     process.exitCode = 1;
   });
 }
+

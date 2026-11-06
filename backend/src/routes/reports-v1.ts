@@ -48,6 +48,7 @@ function createReportRouter(period: 'daily' | 'monthly'): Router {
             date: { $gte: from, $lte: to },
             type: { $in: ['credit', 'debit'] },
             isInternalTransfer: { $ne: true },
+            isLoanRepayment: { $ne: true },
             status: { $ne: 'failed' },
           },
         },

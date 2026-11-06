@@ -184,7 +184,12 @@ transactionRouter.get('/analytics', async (request, response) => {
     const now = new Date();
     const startDate = new Date(now.getFullYear(), now.getMonth() - parsedQuery.data.months + 1, 1);
     const userObjectId = getUserObjectId(userId);
-    const match = { userId: userObjectId, date: { $gte: startDate, $lte: now } };
+    const match = {
+      userId: userObjectId,
+      date: { $gte: startDate, $lte: now },
+      isInternalTransfer: { $ne: true },
+      isLoanRepayment: { $ne: true },
+    };
 
     const [periodTotals, categoryRows, monthlyRows, monthlyBudget] = await Promise.all([
       TransactionModel.aggregate<CashFlowAggregate>([
@@ -277,7 +282,14 @@ transactionRouter.get('/analytics', async (request, response) => {
     startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
 
     const cashFlowForRange = (from: Date) => TransactionModel.aggregate<CashFlowAggregate>([
-      { $match: { userId: userObjectId, date: { $gte: from, $lte: now } } },
+      {
+        $match: {
+          userId: userObjectId,
+          date: { $gte: from, $lte: now },
+          isInternalTransfer: { $ne: true },
+          isLoanRepayment: { $ne: true },
+        },
+      },
       {
         $group: {
           _id: null,

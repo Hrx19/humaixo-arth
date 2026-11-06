@@ -28,6 +28,9 @@ export interface TransactionRecord {
   personId?: Types.ObjectId;
   categoryId?: Types.ObjectId;
   isInternalTransfer?: boolean;
+  transferGroupId?: Types.ObjectId;
+  isLoanRepayment?: boolean;
+  loanId?: Types.ObjectId;
   referenceNumber?: string;
   note?: string;
   source?: TransactionSource;
@@ -111,6 +114,20 @@ const transactionSchema = new Schema<TransactionRecord>(
       type: Boolean,
       default: false,
       required: true,
+    },
+    transferGroupId: {
+      type: Schema.Types.ObjectId,
+      index: true,
+    },
+    isLoanRepayment: {
+      type: Boolean,
+      default: false,
+      required: true,
+    },
+    loanId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Loan',
+      index: true,
     },
     paymentMethod: {
       type: String,

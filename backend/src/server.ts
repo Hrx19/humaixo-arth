@@ -23,6 +23,10 @@ import { peopleV1Router } from './routes/people-v1';
 import { categoriesV1Router } from './routes/categories-v1';
 import { balanceV1Router } from './routes/balance-v1';
 import { dailyReportRouter, monthlyReportRouter } from './routes/reports-v1';
+import { transfersV1Router } from './routes/transfers-v1';
+import { recurringV1Router } from './routes/recurring-v1';
+import { budgetsV1Router } from './routes/budgets-v1';
+import { loansV1Router } from './routes/loans-v1';
 
 export function createApp(): Express {
   const app = express();
@@ -82,6 +86,10 @@ export function createApp(): Express {
   app.use('/api/v1/categories', categoriesV1Router);
   app.use('/api/v1/reports/daily', dailyReportRouter);
   app.use('/api/v1/reports/monthly', monthlyReportRouter);
+  app.use('/api/v1/transfers', transfersV1Router);
+  app.use('/api/v1/recurring', recurringV1Router);
+  app.use('/api/v1/budgets', budgetsV1Router);
+  app.use('/api/v1/loans', loansV1Router);
   app.use('/api/parse-statement', pdfParserRouter);
 
   app.use(notFoundHandler);
