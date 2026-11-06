@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import {
   ResponseType,
@@ -63,10 +64,12 @@ type NativeGitHubButtonProps = {
   onError(message: string): void;
 };
 
-const configuredNativeGoogleClientIds = new Set<string>();
-
 function getGoogleWebClientId(): string {
-  return process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim() ?? '';
+  const environmentClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
+  if (environmentClientId) return environmentClientId;
+
+  const configuredClientId = Constants.expoConfig?.extra?.googleSignIn?.webClientId;
+  return typeof configuredClientId === 'string' ? configuredClientId.trim() : '';
 }
 
 function getGoogleIosClientId(): string {
@@ -94,9 +97,18 @@ function getGitHubNativeCallbackUri(): string {
 }
 
 function isGitHubCallbackUrl(value: string): boolean {
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (!apiUrl) return false;
+
   try {
+    const api = new URL(apiUrl);
     const url = new URL(value);
-    return url.protocol === 'https:' && url.pathname === '/api/auth/callback/github';
+    return api.protocol === 'https:'
+      && url.protocol === 'https:'
+      && url.origin === api.origin
+      && url.pathname === '/api/auth/callback/github'
+      && !url.search
+      && !url.hash;
   } catch {
     return false;
   }
@@ -187,17 +199,14 @@ function NativeGoogleButton({
       }
 
       const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
-      if (!configuredNativeGoogleClientIds.has(webClientId)) {
-        GoogleSignin.configure({
-          // The ID must be the Google OAuth client of type "Web application".
-          webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim(),
-          offlineAccess: false,
-          ...(Platform.OS === 'ios' && iosClientId ? { iosClientId } : {}),
-        });
-        configuredNativeGoogleClientIds.add(webClientId);
-      }
+      GoogleSignin.configure({
+        webClientId,
+        offlineAccess: false,
+        ...(Platform.OS === 'ios' && iosClientId ? { iosClientId } : {}),
+      });
 
-      // Required on Android and deliberately awaited before signIn().
+      // configure() starts native async setup; signIn() awaits that setup internally.
+      // Check Play Services before starting the sign-in flow on Android.
       if (Platform.OS === 'android') {
         await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       }
