@@ -20,3 +20,4 @@ npm-debug.log*
 # Virtual Environments
 venv/
 env/
+/backend/private-storage/

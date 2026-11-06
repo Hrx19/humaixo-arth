@@ -5,24 +5,25 @@ import { BudgetModel } from '../../models/Budget';
 import { TransactionModel } from '../../models/Transaction';
 import { logger } from '../config/logger';
 import { verifyToken } from '../middleware/verifyToken';
+import Decimal from 'decimal.js';
 
 const setBudgetSchema = z.object({
-  amount: z.coerce.number().finite().positive().max(1_000_000_000_000),
+  amount: z.string().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/),
   month: z.coerce.number().int().min(1).max(12).optional(),
   year: z.coerce.number().int().min(2000).max(9999).optional(),
 }).strict();
 
-type ExpenseTotal = { _id: null; amount: number };
+type ExpenseTotal = { _id: null; amount: Types.Decimal128 };
 type BudgetStatus = 'safe' | 'warning' | 'exceeded' | 'not_set';
 
-function getBudgetStatus(amount: number | null, spent: number): BudgetStatus {
+function getBudgetStatus(amount: string | null, spent: string): BudgetStatus {
   if (amount === null) return 'not_set';
-  if (spent >= amount) return 'exceeded';
-  if (spent >= amount * 0.8) return 'warning';
+  if (new Decimal(spent).gte(amount)) return 'exceeded';
+  if (new Decimal(spent).gte(new Decimal(amount).times('0.8'))) return 'warning';
   return 'safe';
 }
 
-async function getMonthlyExpense(userId: Types.ObjectId, year: number, month: number): Promise<number> {
+async function getMonthlyExpense(userId: Types.ObjectId, year: number, month: number): Promise<string> {
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 1);
   const [total] = await TransactionModel.aggregate<ExpenseTotal>([
@@ -36,11 +37,11 @@ async function getMonthlyExpense(userId: Types.ObjectId, year: number, month: nu
     {
       $group: {
         _id: null,
-        amount: { $sum: '$amount' },
+        amount: { $sum: { $convert: { input: '$amount', to: 'decimal' } } },
       },
     },
   ]);
-  return total?.amount ?? 0;
+  return total?.amount.toString() ?? '0';
 }
 
 export const budgetRouter = Router();
@@ -62,7 +63,7 @@ budgetRouter.get('/', async (request, response) => {
       BudgetModel.findOne({ userId: userObjectId, month, year }).lean(),
       getMonthlyExpense(userObjectId, year, month),
     ]);
-    const amount = budget?.amount ?? null;
+    const amount = budget?.amount?.toString() ?? null;
 
     return response.status(200).json({
       success: true,
@@ -71,7 +72,7 @@ budgetRouter.get('/', async (request, response) => {
         month,
         year,
         spent,
-        progress: amount === null ? 0 : Math.min(spent / amount, 1),
+        progress: amount === null ? '0' : Decimal.min(new Decimal(spent).div(amount), 1).toString(),
         status: getBudgetStatus(amount, spent),
       },
     });
@@ -110,7 +111,7 @@ budgetRouter.put('/', async (request, response) => {
   try {
     const budget = await BudgetModel.findOneAndUpdate(
       { userId: userObjectId, month, year },
-      { $set: { amount: parsed.data.amount } },
+      { $set: { amount: Types.Decimal128.fromString(parsed.data.amount) } },
       { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true },
     ).lean();
     const spent = await getMonthlyExpense(userObjectId, year, month);
@@ -118,12 +119,12 @@ budgetRouter.put('/', async (request, response) => {
     return response.status(200).json({
       success: true,
       data: {
-        amount: budget.amount,
+        amount: budget.amount.toString(),
         month: budget.month,
         year: budget.year,
         spent,
-        progress: Math.min(spent / budget.amount, 1),
-        status: getBudgetStatus(budget.amount, spent),
+        progress: Decimal.min(new Decimal(spent).div(budget.amount.toString()), 1).toString(),
+        status: getBudgetStatus(budget.amount.toString(), spent),
       },
     });
   } catch (error) {

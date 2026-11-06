@@ -9,13 +9,20 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { errorHandler, HttpError, notFoundHandler } from './middleware/errorHandler';
 import { authRouter } from './routes/auth';
-import { accountRouter } from './routes/accounts';
+import { accountRouter, financialAccountRouter } from './routes/accounts';
 import { transactionRouter } from './routes/transactions';
 import { aiRouter } from './routes/ai';
 import { statementRouter } from './routes/statements';
 import { analyticsRouter } from './routes/analytics';
 import { pdfParserRouter } from './routes/pdf-parser';
 import { budgetRouter } from './routes/budget';
+import { statementImportV1Router } from './routes/statement-import-v1';
+import { transactionV1Router } from './routes/transactions-v1';
+import { dashboardSummaryRouter } from './routes/dashboard-summary';
+import { peopleV1Router } from './routes/people-v1';
+import { categoriesV1Router } from './routes/categories-v1';
+import { balanceV1Router } from './routes/balance-v1';
+import { dailyReportRouter, monthlyReportRouter } from './routes/reports-v1';
 
 export function createApp(): Express {
   const app = express();
@@ -61,11 +68,20 @@ export function createApp(): Express {
 
   app.use('/api/auth', authRouter);
   app.use('/api/accounts', accountRouter);
+  app.use('/api/v1/accounts', balanceV1Router);
+  app.use('/api/v1/accounts', financialAccountRouter);
   app.use('/api/transactions', transactionRouter);
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/budget', budgetRouter);
   app.use('/api/parse-sms', aiRouter);
   app.use('/api/statements', statementRouter);
+  app.use('/api/v1/statements', statementImportV1Router);
+  app.use('/api/v1/transactions', transactionV1Router);
+  app.use('/api/v1/analytics', dashboardSummaryRouter);
+  app.use('/api/v1/people', peopleV1Router);
+  app.use('/api/v1/categories', categoriesV1Router);
+  app.use('/api/v1/reports/daily', dailyReportRouter);
+  app.use('/api/v1/reports/monthly', monthlyReportRouter);
   app.use('/api/parse-statement', pdfParserRouter);
 
   app.use(notFoundHandler);

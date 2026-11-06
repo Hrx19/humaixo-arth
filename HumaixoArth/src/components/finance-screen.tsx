@@ -26,6 +26,7 @@ type FinanceScreenProps = {
   children: ReactNode;
   rightAction?: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  scrollable?: boolean;
 };
 
 const NAV_ITEMS: { key: FinanceTab; label: string; icon: string; route: Href }[] = [
@@ -43,6 +44,7 @@ export function FinanceScreen({
   children,
   rightAction,
   contentStyle,
+  scrollable = true,
 }: FinanceScreenProps): React.JSX.Element {
   const router = useRouter();
   const colors = useFinanceColors();
@@ -131,23 +133,35 @@ export function FinanceScreen({
             </View>
           </View>
 
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={[
-              styles.scrollContent,
-              { paddingHorizontal: horizontalPadding },
-            ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={[styles.content, contentStyle, isDesktop && styles.desktopContent]}>
-              <View style={styles.pageHeading}>
-                <Text style={[styles.pageTitle, { color: colors.text }]}>{title}</Text>
-                {subtitle ? <Text style={[styles.pageSubtitle, { color: colors.muted }]}>{subtitle}</Text> : null}
+          {scrollable ? (
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={[
+                styles.scrollContent,
+                { paddingHorizontal: horizontalPadding },
+              ]}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={[styles.content, contentStyle, isDesktop && styles.desktopContent]}>
+                <View style={styles.pageHeading}>
+                  <Text style={[styles.pageTitle, { color: colors.text }]}>{title}</Text>
+                  {subtitle ? <Text style={[styles.pageSubtitle, { color: colors.muted }]}>{subtitle}</Text> : null}
+                </View>
+                {children}
               </View>
-              {children}
+            </ScrollView>
+          ) : (
+            <View style={[styles.scrollContent, styles.nonScrollableContent, { paddingHorizontal: horizontalPadding }]}>
+              <View style={[styles.content, styles.nonScrollableContent, contentStyle, isDesktop && styles.desktopContent]}>
+                <View style={styles.pageHeading}>
+                  <Text style={[styles.pageTitle, { color: colors.text }]}>{title}</Text>
+                  {subtitle ? <Text style={[styles.pageSubtitle, { color: colors.muted }]}>{subtitle}</Text> : null}
+                </View>
+                {children}
+              </View>
             </View>
-          </ScrollView>
+          )}
 
           {!isDesktop ? renderNavigation(false) : null}
         </View>
@@ -224,6 +238,7 @@ const styles = StyleSheet.create({
   profileButtonText: { color: FinanceTheme.colors.primarySoft, fontSize: 13, fontWeight: '800' },
   scrollView: { flex: 1, minWidth: 0 },
   scrollContent: { width: '100%', alignItems: 'center', paddingTop: 12, paddingBottom: 28 },
+  nonScrollableContent: { flex: 1, minHeight: 0 },
   content: { width: '100%', maxWidth: 760, gap: 16 },
   desktopContent: { maxWidth: 1120, gap: 20 },
   pageHeading: { marginBottom: 2 },

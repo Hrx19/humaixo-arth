@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import Decimal from 'decimal.js';
 import { Types } from 'mongoose';
 import { z } from 'zod';
 import { AccountModel } from '../../models/Account';
@@ -6,6 +7,8 @@ import { BudgetModel } from '../../models/Budget';
 import { logger } from '../config/logger';
 import { getMonthlyBalanceHistory, getUserAccountBalances } from '../services/account-balances';
 import { verifyToken } from '../middleware/verifyToken';
+import { decimal128 } from '../services/money';
+import { findOrCreateCategory, findOrCreatePerson } from '../services/financial-directory';
 import {
   TransactionModel,
   type TransactionType,
@@ -26,15 +29,16 @@ const listQuerySchema = z.object({
 const createTransactionSchema = z.object({
   accountId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
   merchant: z.string().trim().min(1).max(120),
-  amount: z.coerce.number().positive().finite().max(1_000_000_000_000),
+  amount: z.string().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/)
+    .refine((value) => new Decimal(value).isPositive()),
   type: z.enum(['credit', 'debit']),
   category: z.string().trim().min(1).max(60).default('Uncategorised'),
   counterparty: z.string().trim().min(1).max(120).optional(),
   counterpartyType: z.enum(['person', 'merchant', 'other']).optional(),
   paymentMethod: z.string().trim().max(40).optional(),
   date: z.coerce.date().optional(),
-  balanceBefore: z.coerce.number().finite().min(-1_000_000_000_000).max(1_000_000_000_000).optional(),
-  balanceAfter: z.coerce.number().finite().min(-1_000_000_000_000).max(1_000_000_000_000).optional(),
+  balanceBefore: z.string().regex(/^-?(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/).optional(),
+  balanceAfter: z.string().regex(/^-?(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/).optional(),
   referenceNumber: z.string().trim().max(120).optional(),
   note: z.string().trim().max(500).optional(),
   description: z.string().trim().max(500).optional(),
@@ -54,31 +58,31 @@ const balanceHistoryQuerySchema = z.object({
   accountId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
 }).strict();
 
-type CategoryAggregate = { _id: string; amount: number; count: number };
+type CategoryAggregate = { _id: string; amount: Types.Decimal128; count: number };
 type CashFlowAggregate = {
   _id: null;
-  income: number;
-  expense: number;
+  income: Types.Decimal128;
+  expense: Types.Decimal128;
 };
 type MonthlyCashFlowAggregate = {
   _id: { year: number; month: number };
-  income: number;
-  expense: number;
+  income: Types.Decimal128;
+  expense: Types.Decimal128;
 };
-type MonthlySummary = { year: number; month: number; income: number; expense: number };
+type MonthlySummary = { year: number; month: number; income: string; expense: string };
 type BudgetStatus = 'safe' | 'warning' | 'exceeded' | 'not_set';
 type PersonAggregate = {
   _id: string;
   name?: string;
-  sent: number;
-  received: number;
+  sent: Types.Decimal128;
+  received: Types.Decimal128;
   count: number;
   lastDate: Date;
 };
 type MerchantAggregate = {
   _id: string;
-  spent: number;
-  received: number;
+  spent: Types.Decimal128;
+  received: Types.Decimal128;
   count: number;
   lastDate: Date;
   categories: string[];
@@ -87,7 +91,7 @@ type TransactionViewSource = {
   _id: Types.ObjectId;
   accountId?: Types.ObjectId;
   merchant: string;
-  amount: number;
+  amount: Types.Decimal128;
   type: TransactionType;
   category: string;
   counterparty?: string;
@@ -95,8 +99,8 @@ type TransactionViewSource = {
   counterpartyType?: 'person' | 'merchant' | 'other';
   paymentMethod?: string;
   date?: Date;
-  balanceBefore?: number;
-  balanceAfter?: number;
+  balanceBefore?: Types.Decimal128;
+  balanceAfter?: Types.Decimal128;
   referenceNumber?: string;
   note?: string;
   source?: string;
@@ -125,7 +129,7 @@ function serializeTransaction(transaction: TransactionViewSource) {
     id: transaction._id.toString(),
     accountId: transaction.accountId?.toString() ?? null,
     merchant: transaction.merchant,
-    amount: transaction.amount,
+    amount: transaction.amount.toString(),
     type: transaction.type,
     category: transaction.category,
     counterparty: transaction.counterparty ?? null,
@@ -133,8 +137,8 @@ function serializeTransaction(transaction: TransactionViewSource) {
     counterpartyType: transaction.counterpartyType ?? null,
     paymentMethod: transaction.paymentMethod ?? null,
     date: (transaction.date ?? new Date()).toISOString(),
-    balanceBefore: transaction.balanceBefore ?? null,
-    balanceAfter: transaction.balanceAfter ?? null,
+    balanceBefore: transaction.balanceBefore?.toString() ?? null,
+    balanceAfter: transaction.balanceAfter?.toString() ?? null,
     referenceNumber: transaction.referenceNumber ?? null,
     note: transaction.note ?? null,
     source: transaction.source ?? 'manual',
@@ -151,10 +155,10 @@ function errorResponse(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-function getBudgetStatus(amount: number | null, spent: number): BudgetStatus {
+function getBudgetStatus(amount: string | null, spent: string): BudgetStatus {
   if (amount === null) return 'not_set';
-  if (spent >= amount) return 'exceeded';
-  if (spent >= amount * 0.8) return 'warning';
+  if (new Decimal(spent).gte(amount)) return 'exceeded';
+  if (new Decimal(spent).gte(new Decimal(amount).times('0.8'))) return 'warning';
   return 'safe';
 }
 
@@ -190,12 +194,12 @@ transactionRouter.get('/analytics', async (request, response) => {
             _id: null,
             income: {
               $sum: {
-                $cond: [{ $eq: ['$type', 'credit'] }, '$amount', 0],
+                $cond: [{ $eq: ['$type', 'credit'] }, '$amount', Types.Decimal128.fromString('0')],
               },
             },
             expense: {
               $sum: {
-                $cond: [{ $eq: ['$type', 'debit'] }, '$amount', 0],
+                $cond: [{ $eq: ['$type', 'debit'] }, '$amount', Types.Decimal128.fromString('0')],
               },
             },
           },
@@ -222,12 +226,12 @@ transactionRouter.get('/analytics', async (request, response) => {
             },
             income: {
               $sum: {
-                $cond: [{ $eq: ['$type', 'credit'] }, '$amount', 0],
+                $cond: [{ $eq: ['$type', 'credit'] }, '$amount', Types.Decimal128.fromString('0')],
               },
             },
             expense: {
               $sum: {
-                $cond: [{ $eq: ['$type', 'debit'] }, '$amount', 0],
+                $cond: [{ $eq: ['$type', 'debit'] }, '$amount', Types.Decimal128.fromString('0')],
               },
             },
           },
@@ -246,27 +250,27 @@ transactionRouter.get('/analytics', async (request, response) => {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
       const year = monthDate.getFullYear();
       const month = monthDate.getMonth() + 1;
-      monthlyByKey.set(`${year}-${month}`, { year, month, income: 0, expense: 0 });
+      monthlyByKey.set(`${year}-${month}`, { year, month, income: '0', expense: '0' });
     }
 
     for (const row of monthlyRows) {
       const summary = monthlyByKey.get(`${row._id.year}-${row._id.month}`);
       if (!summary) continue;
-      summary.income = row.income;
-      summary.expense = row.expense;
+      summary.income = row.income.toString();
+      summary.expense = row.expense.toString();
     }
 
     const monthlyTotals = Array.from(monthlyByKey.values());
-    const totalIncome = periodTotals[0]?.income ?? 0;
-    const totalExpense = periodTotals[0]?.expense ?? 0;
+    const totalIncome = periodTotals[0]?.income.toString() ?? '0';
+    const totalExpense = periodTotals[0]?.expense.toString() ?? '0';
     const totals = { income: totalIncome, expense: totalExpense };
     const currentMonth = monthlyTotals[monthlyTotals.length - 1] ?? {
       year: now.getFullYear(),
       month: now.getMonth() + 1,
-      income: 0,
-      expense: 0,
+      income: '0',
+      expense: '0',
     };
-    const budgetAmount = monthlyBudget?.amount ?? null;
+    const budgetAmount = monthlyBudget?.amount.toString() ?? null;
     const budgetStatus = getBudgetStatus(budgetAmount, currentMonth.expense);
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfWeek = new Date(startOfToday);
@@ -279,12 +283,12 @@ transactionRouter.get('/analytics', async (request, response) => {
           _id: null,
           income: {
             $sum: {
-              $cond: [{ $eq: ['$type', 'credit'] }, '$amount', 0],
+              $cond: [{ $eq: ['$type', 'credit'] }, '$amount', Types.Decimal128.fromString('0')],
             },
           },
           expense: {
             $sum: {
-              $cond: [{ $eq: ['$type', 'debit'] }, '$amount', 0],
+              $cond: [{ $eq: ['$type', 'debit'] }, '$amount', Types.Decimal128.fromString('0')],
             },
           },
         },
@@ -298,29 +302,32 @@ transactionRouter.get('/analytics', async (request, response) => {
     ]);
 
     const toIncomeExpense = (rows: CashFlowAggregate[]) => ({
-      income: rows[0]?.income ?? 0,
-      expense: rows[0]?.expense ?? 0,
+      income: rows[0]?.income.toString() ?? '0',
+      expense: rows[0]?.expense.toString() ?? '0',
     });
 
-    const accountTotal = accountBalances.reduce((sum, item) => sum + item.balance, 0);
+    const accountTotal = accountBalances.reduce(
+      (sum, item) => sum.plus(item.balance),
+      new Decimal('0'),
+    ).toString();
 
     return response.status(200).json({
       byCategory: categoryRows.map((row) => ({
         category: row._id,
-        amount: row.amount,
+        amount: row.amount.toString(),
         count: row.count,
       })),
       categoryBreakdown: categoryRows.map((row) => ({
         category: row._id,
-        amount: row.amount,
+        amount: row.amount.toString(),
         count: row.count,
       })),
       monthlyTotals,
       monthlyTrend: monthlyTotals,
-      totals: { ...totals, net: totals.income - totals.expense },
+      totals: { ...totals, net: new Decimal(totals.income).minus(totals.expense).toString() },
       totalIncome,
       totalExpense,
-      balance: totalIncome - totalExpense,
+      balance: new Decimal(totalIncome).minus(totalExpense).toString(),
       today: toIncomeExpense(todayRows),
       thisWeek: toIncomeExpense(weekRows),
       thisMonth: currentMonth,
@@ -328,7 +335,7 @@ transactionRouter.get('/analytics', async (request, response) => {
       budget: {
         amount: budgetAmount,
         spent: currentMonth.expense,
-        progress: budgetAmount === null ? 0 : Math.min(currentMonth.expense / budgetAmount, 1),
+        progress: budgetAmount === null ? '0' : Decimal.min(new Decimal(currentMonth.expense).div(budgetAmount.toString()), 1).toString(),
         status: budgetStatus,
       },
       trackedBalance: accountTotal,
@@ -383,7 +390,7 @@ transactionRouter.get('/balance-at', async (request, response) => {
 
     return response.status(200).json({
       at: parsedQuery.data.at.toISOString(),
-      balance: byAccount.reduce((sum, account) => sum + account.balance, 0),
+      balance: byAccount.reduce((sum, account) => sum.plus(account.balance), new Decimal('0')).toString(),
       byAccount,
     });
   } catch (error) {
@@ -441,8 +448,8 @@ transactionRouter.get('/people', async (request, response) => {
         $group: {
           _id: '$counterpartyKey',
           name: { $max: '$counterparty' },
-          sent: { $sum: { $cond: [{ $eq: ['$type', 'debit'] }, '$amount', 0] } },
-          received: { $sum: { $cond: [{ $eq: ['$type', 'credit'] }, '$amount', 0] } },
+          sent: { $sum: { $cond: [{ $eq: ['$type', 'debit'] }, '$amount', Types.Decimal128.fromString('0')] } },
+          received: { $sum: { $cond: [{ $eq: ['$type', 'credit'] }, '$amount', Types.Decimal128.fromString('0')] } },
           count: { $sum: 1 },
           lastDate: { $max: '$date' },
         },
@@ -454,9 +461,9 @@ transactionRouter.get('/people', async (request, response) => {
       people.map((person) => ({
         key: person._id,
         name: person.name ?? person._id,
-        sent: person.sent,
-        received: person.received,
-        net: person.received - person.sent,
+        sent: person.sent.toString(),
+        received: person.received.toString(),
+        net: new Decimal(person.received.toString()).minus(person.sent.toString()).toString(),
         transactionCount: person.count,
         lastDate: person.lastDate?.toISOString() ?? null,
       })),
@@ -499,8 +506,8 @@ transactionRouter.get('/people/:counterpartyKey', async (request, response) => {
           $group: {
             _id: '$counterpartyKey',
             name: { $max: '$counterparty' },
-            sent: { $sum: { $cond: [{ $eq: ['$type', 'debit'] }, '$amount', 0] } },
-            received: { $sum: { $cond: [{ $eq: ['$type', 'credit'] }, '$amount', 0] } },
+            sent: { $sum: { $cond: [{ $eq: ['$type', 'debit'] }, '$amount', Types.Decimal128.fromString('0')] } },
+            received: { $sum: { $cond: [{ $eq: ['$type', 'credit'] }, '$amount', Types.Decimal128.fromString('0')] } },
             count: { $sum: 1 },
             lastDate: { $max: '$date' },
           },
@@ -515,9 +522,9 @@ transactionRouter.get('/people/:counterpartyKey', async (request, response) => {
       person: {
         key: summary._id,
         name: summary.name ?? summary._id,
-        sent: summary.sent,
-        received: summary.received,
-        net: summary.received - summary.sent,
+        sent: summary.sent.toString(),
+        received: summary.received.toString(),
+        net: new Decimal(summary.received.toString()).minus(summary.sent.toString()).toString(),
         transactionCount: summary.count,
         lastDate: summary.lastDate?.toISOString() ?? null,
       },
@@ -546,8 +553,8 @@ transactionRouter.get('/merchants', async (request, response) => {
       {
         $group: {
           _id: '$merchant',
-          spent: { $sum: { $cond: [{ $eq: ['$type', 'debit'] }, '$amount', 0] } },
-          received: { $sum: { $cond: [{ $eq: ['$type', 'credit'] }, '$amount', 0] } },
+          spent: { $sum: { $cond: [{ $eq: ['$type', 'debit'] }, '$amount', Types.Decimal128.fromString('0')] } },
+          received: { $sum: { $cond: [{ $eq: ['$type', 'credit'] }, '$amount', Types.Decimal128.fromString('0')] } },
           count: { $sum: 1 },
           lastDate: { $max: '$date' },
           categories: { $addToSet: '$category' },
@@ -560,8 +567,8 @@ transactionRouter.get('/merchants', async (request, response) => {
     return response.status(200).json(
       merchants.map((merchant) => ({
         name: merchant._id,
-        spent: merchant.spent,
-        received: merchant.received,
+        spent: merchant.spent.toString(),
+        received: merchant.received.toString(),
         transactionCount: merchant.count,
         lastDate: merchant.lastDate?.toISOString() ?? null,
         categories: merchant.categories,
@@ -675,25 +682,45 @@ transactionRouter.post('/', async (request, response) => {
     }
 
     const transactionDate = parsed.data.date ?? new Date();
-    const delta = parsed.data.type === 'credit' ? parsed.data.amount : -parsed.data.amount;
+    const delta = parsed.data.type === 'credit'
+      ? new Decimal(parsed.data.amount)
+      : new Decimal(parsed.data.amount).negated();
     let balanceBefore = parsed.data.balanceBefore;
     let balanceAfter = parsed.data.balanceAfter;
-    if (balanceAfter !== undefined && balanceBefore === undefined) balanceBefore = balanceAfter - delta;
-    if (balanceBefore !== undefined && balanceAfter === undefined) balanceAfter = balanceBefore + delta;
+    if (balanceAfter !== undefined && balanceBefore === undefined) {
+      balanceBefore = new Decimal(balanceAfter).minus(delta).toString();
+    }
+    if (balanceBefore !== undefined && balanceAfter === undefined) {
+      balanceAfter = new Decimal(balanceBefore).plus(delta).toString();
+    }
     if (account && balanceBefore === undefined && balanceAfter === undefined) {
       balanceBefore = await getUserAccountBalances(userObjectId, new Date(transactionDate.getTime() - 1), account._id)
         .then((balances) => balances[0]?.balance);
-      if (balanceBefore !== undefined) balanceAfter = balanceBefore + delta;
+      if (balanceBefore !== undefined) balanceAfter = new Decimal(balanceBefore).plus(delta).toString();
     }
 
     const counterparty = parsed.data.counterparty;
+    const categoryId = await findOrCreateCategory(
+      userObjectId,
+      parsed.data.category,
+      parsed.data.category.toLowerCase() === 'transfer'
+        ? 'transfer'
+        : parsed.data.type === 'credit' ? 'income' : 'expense',
+    );
+    const personId = parsed.data.counterpartyType === 'person'
+      ? await findOrCreatePerson(userObjectId, counterparty)
+      : undefined;
     const transaction = await TransactionModel.create({
       userId: userObjectId,
       accountId: account?._id,
       ...parsed.data,
+      amount: decimal128(parsed.data.amount),
+      balanceBefore: balanceBefore === undefined ? undefined : decimal128(balanceBefore),
+      balanceAfter: balanceAfter === undefined ? undefined : decimal128(balanceAfter),
+      categoryId,
+      ...(personId ? { personId } : {}),
+      isInternalTransfer: /\b(?:self transfer|own account|own accounts|internal transfer|between my accounts)\b/i.test(parsed.data.description ?? ''),
       date: transactionDate,
-      balanceBefore,
-      balanceAfter,
       counterpartyKey: counterparty ? normalizeCounterparty(counterparty) : undefined,
       source: 'manual',
     });

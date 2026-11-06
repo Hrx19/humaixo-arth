@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import Decimal from 'decimal.js';
 import { Types } from 'mongoose';
 import { z } from 'zod';
 import { TransactionModel } from '../../models/Transaction';
@@ -9,11 +10,11 @@ const monthlyTrendQuerySchema = z.object({
   months: z.coerce.number().int().min(1).max(36).default(12),
 }).strict();
 
-type TypeTotal = { _id: 'credit' | 'debit'; amount: number };
-type CategoryTotal = { _id: string; amount: number; count: number };
+type TypeTotal = { _id: 'credit' | 'debit'; amount: Types.Decimal128 };
+type CategoryTotal = { _id: string; amount: Types.Decimal128; count: number };
 type MonthlyTotal = {
   _id: { year: number; month: number; type: 'credit' | 'debit' };
-  amount: number;
+  amount: Types.Decimal128;
 };
 
 export const analyticsRouter = Router();
@@ -32,16 +33,16 @@ analyticsRouter.get('/summary', async (request, response) => {
   try {
     const totals = await TransactionModel.aggregate<TypeTotal>([
       { $match: { userId: userObjectId(userId) } },
-      { $group: { _id: '$type', amount: { $sum: '$amount' } } },
+      { $group: { _id: '$type', amount: { $sum: { $convert: { input: '$amount', to: 'decimal' } } } } },
     ]);
-    const income = totals.find((item) => item._id === 'credit')?.amount ?? 0;
-    const expense = totals.find((item) => item._id === 'debit')?.amount ?? 0;
+    const income = totals.find((item) => item._id === 'credit')?.amount.toString() ?? '0';
+    const expense = totals.find((item) => item._id === 'debit')?.amount.toString() ?? '0';
     return response.status(200).json({
       success: true,
       data: {
         totalIncome: income,
         totalExpense: expense,
-        currentBalance: income - expense,
+        currentBalance: new Decimal(income).minus(expense).toString(),
       },
     });
   } catch (error) {
@@ -65,7 +66,7 @@ analyticsRouter.get('/category-breakdown', async (request, response) => {
       {
         $group: {
           _id: '$category',
-          amount: { $sum: '$amount' },
+          amount: { $sum: { $convert: { input: '$amount', to: 'decimal' } } },
           count: { $sum: 1 },
         },
       },
@@ -75,7 +76,7 @@ analyticsRouter.get('/category-breakdown', async (request, response) => {
       success: true,
       data: categories.map(({ _id, amount, count }) => ({
         category: _id,
-        amount,
+        amount: amount.toString(),
         count,
       })),
     });
@@ -123,25 +124,25 @@ analyticsRouter.get('/monthly-trend', async (request, response) => {
             month: { $month: '$date' },
             type: '$type',
           },
-          amount: { $sum: '$amount' },
+          amount: { $sum: { $convert: { input: '$amount', to: 'decimal' } } },
         },
       },
       { $sort: { '_id.year': 1, '_id.month': 1 } },
     ]);
 
-    const months = new Map<string, { year: number; month: number; income: number; expense: number }>();
+    const months = new Map<string, { year: number; month: number; income: string; expense: string }>();
     for (let offset = parsedQuery.data.months - 1; offset >= 0; offset -= 1) {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
       const year = monthDate.getFullYear();
       const month = monthDate.getMonth() + 1;
-      months.set(`${year}-${month}`, { year, month, income: 0, expense: 0 });
+      months.set(`${year}-${month}`, { year, month, income: '0', expense: '0' });
     }
 
     for (const row of rows) {
       const month = months.get(`${row._id.year}-${row._id.month}`);
       if (!month) continue;
-      if (row._id.type === 'credit') month.income = row.amount;
-      else month.expense = row.amount;
+      if (row._id.type === 'credit') month.income = row.amount.toString();
+      else month.expense = row.amount.toString();
     }
 
     return response.status(200).json({ success: true, data: Array.from(months.values()) });

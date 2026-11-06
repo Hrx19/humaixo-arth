@@ -14,7 +14,7 @@ export type CounterpartyType = 'person' | 'merchant' | 'other';
 export interface TransactionRecord {
   userId: Types.ObjectId;
   accountId?: Types.ObjectId;
-  amount: number;
+  amount: Types.Decimal128;
   type: TransactionType;
   category: string;
   merchant: string;
@@ -23,8 +23,11 @@ export interface TransactionRecord {
   counterpartyType?: CounterpartyType;
   paymentMethod?: string;
   date?: Date;
-  balanceBefore?: number;
-  balanceAfter?: number;
+  balanceBefore?: Types.Decimal128;
+  balanceAfter?: Types.Decimal128;
+  personId?: Types.ObjectId;
+  categoryId?: Types.ObjectId;
+  isInternalTransfer?: boolean;
   referenceNumber?: string;
   note?: string;
   source?: TransactionSource;
@@ -32,6 +35,12 @@ export interface TransactionRecord {
   statementImportId?: Types.ObjectId;
   confidence?: number;
   description?: string;
+  rawSourceData?: unknown;
+  sourceProvenance?: unknown;
+  userCorrections?: unknown;
+  userEdits?: unknown[];
+  sourceRowNumber?: number;
+  transactionTime?: string | null;
   rawSMS?: string;
 }
 
@@ -52,10 +61,8 @@ const transactionSchema = new Schema<TransactionRecord>(
       index: true,
     },
     amount: {
-      type: Number,
+      type: Schema.Types.Decimal128,
       required: true,
-      min: 0.01,
-      max: 1_000_000_000_000,
     },
     type: {
       type: String,
@@ -90,6 +97,21 @@ const transactionSchema = new Schema<TransactionRecord>(
       type: String,
       enum: ['person', 'merchant', 'other'],
     },
+    personId: {
+      type: Schema.Types.ObjectId,
+      ref: 'FinancialPerson',
+      index: true,
+    },
+    categoryId: {
+      type: Schema.Types.ObjectId,
+      ref: 'FinancialCategory',
+      index: true,
+    },
+    isInternalTransfer: {
+      type: Boolean,
+      default: false,
+      required: true,
+    },
     paymentMethod: {
       type: String,
       trim: true,
@@ -102,14 +124,10 @@ const transactionSchema = new Schema<TransactionRecord>(
       index: true,
     },
     balanceBefore: {
-      type: Number,
-      min: -1_000_000_000_000,
-      max: 1_000_000_000_000,
+      type: Schema.Types.Decimal128,
     },
     balanceAfter: {
-      type: Number,
-      min: -1_000_000_000_000,
-      max: 1_000_000_000_000,
+      type: Schema.Types.Decimal128,
     },
     referenceNumber: {
       type: String,
@@ -147,6 +165,32 @@ const transactionSchema = new Schema<TransactionRecord>(
       type: String,
       trim: true,
       maxlength: 500,
+    },
+    rawSourceData: {
+      type: Schema.Types.Mixed,
+      select: false,
+    },
+    sourceProvenance: {
+      type: Schema.Types.Mixed,
+      select: false,
+    },
+    userCorrections: {
+      type: Schema.Types.Mixed,
+      select: false,
+    },
+    userEdits: {
+      type: [Schema.Types.Mixed],
+      default: [],
+      select: false,
+    },
+    sourceRowNumber: {
+      type: Number,
+      min: 2,
+    },
+    transactionTime: {
+      type: String,
+      match: /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/,
+      default: null,
     },
     rawSMS: {
       type: String,

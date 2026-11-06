@@ -2,32 +2,36 @@ import { apiUrl } from '@/config/api';
 import { useAuthStore } from '@/store/authStore';
 
 export type ManagedAccountType = 'savings' | 'current' | 'cash' | 'credit_card' | 'wallet';
-export type ManagedAccountStatus = 'active' | 'inactive' | 'closed';
+export type ManagedAccountStatus = 'active' | 'archived';
+export type AccountSource = 'user_entered' | 'statement_reported';
 
 export type ManagedAccount = {
   id: string;
-  bankName: string | null;
-  displayName: string;
-  accountType: ManagedAccountType;
+  name: string;
+  institutionName: string;
+  type: ManagedAccountType;
+  maskedNumber: string | null;
   currentBalance: string;
   currency: string;
+  status: ManagedAccountStatus;
+  source: AccountSource;
 };
 
 export type ManagedAccountDetails = ManagedAccount & {
-  maskedNumber: string | null;
   openingBalance: string;
   openingBalanceDate: string;
-  status: ManagedAccountStatus;
   createdAt: string | null;
   updatedAt: string | null;
 };
 
 export type CreateManagedAccountInput = {
-  bankName: string;
-  displayName: string;
-  accountType: ManagedAccountType;
+  name: string;
+  institutionName: string;
+  type: ManagedAccountType;
+  maskedNumber?: string;
   currency?: string;
   openingBalance: string;
+  openingBalanceDate?: string;
 };
 
 export class AccountServiceError extends Error {
@@ -119,7 +123,14 @@ export const AccountService = {
 
   async updateAccount(
     id: string,
-    input: { displayName?: string; status?: ManagedAccountStatus },
+    input: {
+      name?: string;
+      institutionName?: string;
+      type?: ManagedAccountType;
+      currency?: string;
+      maskedNumber?: string | null;
+      status?: ManagedAccountStatus;
+    },
   ): Promise<ManagedAccount> {
     const response = await request<ManagedAccount>(
       `/api/v1/accounts/${encodeURIComponent(id)}`,

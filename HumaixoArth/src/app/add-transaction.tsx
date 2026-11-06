@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import Decimal from 'decimal.js';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/auth-context';
 import { FinanceScreen } from '@/components/finance-screen';
@@ -52,10 +53,10 @@ export default function AddTransactionScreen(): React.JSX.Element {
       router.push('/login');
       return;
     }
-    const numericAmount = Number(amount);
-    const numericBalance = balanceAfter.trim() ? Number(balanceAfter) : undefined;
+    const validAmount = /^\d+(?:\.\d{1,2})?$/.test(amount) && new Decimal(amount).isPositive();
+    const validBalance = !balanceAfter.trim() || /^-?\d+(?:\.\d{1,2})?$/.test(balanceAfter);
     let hasFieldErrors = false;
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    if (!validAmount) {
       setAmountError('Enter an amount greater than zero.');
       hasFieldErrors = true;
     } else {
@@ -75,7 +76,7 @@ export default function AddTransactionScreen(): React.JSX.Element {
       setError('Enter the merchant or transaction description.');
       return;
     }
-    if (balanceAfter.trim() && !Number.isFinite(numericBalance)) {
+    if (!validBalance) {
       setError('Enter a valid balance after this transaction.');
       return;
     }
@@ -83,13 +84,13 @@ export default function AddTransactionScreen(): React.JSX.Element {
     const input: CreateTransactionInput = {
       ...(accountId ? { accountId } : {}),
       merchant: merchant.trim(),
-      amount: numericAmount,
+      amount,
       type,
       category,
       date: transactionDate.toISOString(),
       ...(counterparty.trim() ? { counterparty: counterparty.trim(), counterpartyType: 'person' as const } : {}),
       ...(paymentMethod.trim() ? { paymentMethod: paymentMethod.trim() } : {}),
-      ...(numericBalance !== undefined ? { balanceAfter: numericBalance } : {}),
+      ...(balanceAfter.trim() ? { balanceAfter: balanceAfter.trim() } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
       description: merchant.trim(),
     };
@@ -129,7 +130,7 @@ export default function AddTransactionScreen(): React.JSX.Element {
               value={amount}
               onChangeText={(value) => {
                 setAmount(value);
-                if (Number.isFinite(Number(value)) && Number(value) > 0) setAmountError(null);
+                if (/^\d+(?:\.\d{1,2})?$/.test(value) && new Decimal(value).isPositive()) setAmountError(null);
               }}
               placeholder="0.00"
               placeholderTextColor={colors.subtle}

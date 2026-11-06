@@ -14,7 +14,7 @@ import { FileText, ShieldCheck, Upload } from 'lucide-react-native';
 import { useAuth } from '@/auth/auth-context';
 import { FinanceScreen } from '@/components/finance-screen';
 import { EmptyState, PrimaryButton, SurfaceCard, SectionHeader } from '@/components/finance-ui';
-import { FinanceTheme } from '@/constants/finance-theme';
+import { FinanceTheme, formatINR } from '@/constants/finance-theme';
 import { FinanceService } from '@/services/finance-service';
 import { useFinanceStore } from '@/store/finance-store';
 
@@ -151,7 +151,7 @@ export default function ParseStatementScreen(): React.JSX.Element {
                       <Text style={styles.accountName}>{account.name}</Text>
                       <Text style={styles.accountMeta}>{account.institution} · {account.type.replace('_', ' ')}</Text>
                     </View>
-                    <Text style={styles.accountBalance}>{account.currency} {account.balance.toLocaleString('en-IN')}</Text>
+                    <Text style={styles.accountBalance}>{account.currency} {formatINR(account.balance)}</Text>
                   </TouchableOpacity>
                 );
               })}

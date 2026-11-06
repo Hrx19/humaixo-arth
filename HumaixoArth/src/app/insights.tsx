@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Decimal from 'decimal.js';
 import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { BarChart, LineChart, PieChart } from 'react-native-chart-kit';
 import { useRouter } from 'expo-router';
@@ -70,7 +71,7 @@ export default function InsightsScreen(): React.JSX.Element {
     if (isGuest) return GUEST_CATEGORIES;
     return (analytics?.byCategory ?? []).map((item, index) => ({
       name: item.category,
-      amount: item.amount,
+      amount: new Decimal(item.amount).toNumber(),
       color: CHART_COLORS[index % CHART_COLORS.length],
       legendFontColor: '#a1a1b3',
       legendFontSize: 10,
@@ -78,8 +79,8 @@ export default function InsightsScreen(): React.JSX.Element {
   }, [analytics?.byCategory, isGuest]);
 
   const monthlyData = analytics?.monthlyTotals.slice(-6) ?? [];
-  const income = monthlyData.map((month) => month.income);
-  const expense = monthlyData.map((month) => month.expense);
+  const income = monthlyData.map((month) => new Decimal(month.income).toNumber());
+  const expense = monthlyData.map((month) => new Decimal(month.expense).toNumber());
   const healthScore = calculateHealthScore(analytics);
   const topCategory = analytics?.byCategory[0];
   const recurringMerchants = merchants.filter((merchant) =>
@@ -172,8 +173,8 @@ export default function InsightsScreen(): React.JSX.Element {
                   ]
                   : monthlyData.map((month) => ({
                     label: new Date(month.year, month.month - 1, 1).toLocaleDateString('en-IN', { month: 'short' }),
-                    income: month.income,
-                    expense: month.expense,
+                    income: new Decimal(month.income).toNumber(),
+                    expense: new Decimal(month.expense).toNumber(),
                   }))}
               />
             ) : <Text style={styles.noData}>No monthly cash flow available for this range.</Text>
@@ -229,7 +230,7 @@ export default function InsightsScreen(): React.JSX.Element {
                   }))
                   : history.map((point) => ({
                     label: new Date(point.date).toLocaleDateString('en-IN', { month: 'short' }),
-                    value: point.balance,
+                    value: new Decimal(point.balance).toNumber(),
                   })))}
               />
             ) : <Text style={styles.noData}>Balance trend appears when accounts have opening balances or statement snapshots.</Text>
@@ -247,7 +248,7 @@ export default function InsightsScreen(): React.JSX.Element {
             />
           ) : history.length > 0 ? (
             <LineChart
-              data={{ labels: history.map((point) => new Date(point.date).toLocaleDateString('en-IN', { month: 'short' })), datasets: [{ data: history.map((point) => point.balance) }] }}
+              data={{ labels: history.map((point) => new Date(point.date).toLocaleDateString('en-IN', { month: 'short' })), datasets: [{ data: history.map((point) => new Decimal(point.balance).toNumber()) }] }}
               width={chartWidth}
               height={170}
               chartConfig={chartConfig}
@@ -294,11 +295,21 @@ export default function InsightsScreen(): React.JSX.Element {
 }
 
 function calculateHealthScore(analytics: FinanceAnalytics | null): number | null {
-  if (!analytics || analytics.totals.income <= 0) return null;
-  const savingsRate = (analytics.totals.income - analytics.totals.expense) / analytics.totals.income;
-  const score = 500 + Math.min(300, Math.max(-300, savingsRate * 500));
-  const dataCoverageBonus = Math.min(100, analytics.monthlyTotals.filter((month) => month.income > 0 || month.expense > 0).length * 10);
-  return Math.round(Math.max(0, Math.min(1000, score + dataCoverageBonus)));
+  if (!analytics || !new Decimal(analytics.totals.income).isPositive()) return null;
+  const savingsRate = new Decimal(analytics.totals.income)
+    .minus(analytics.totals.expense)
+    .dividedBy(analytics.totals.income);
+  const savingsScore = savingsRate.mul(500).clamp(-300, 300);
+  const dataCoverageBonus = Math.min(
+    100,
+    analytics.monthlyTotals.filter((month) =>
+      new Decimal(month.income).isPositive() || new Decimal(month.expense).isPositive(),
+    ).length * 10,
+  );
+  return new Decimal(500).plus(savingsScore).plus(dataCoverageBonus)
+    .clamp(0, 1000)
+    .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+    .toNumber();
 }
 
 function LegendDot({ color, label }: { color: string; label: string }): React.JSX.Element {

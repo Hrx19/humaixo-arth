@@ -10,14 +10,45 @@ import { EmptyState, SurfaceCard } from '@/components/finance-ui';
 import { useFinanceColors } from '@/constants/finance-theme';
 
 function formatBalance(value: string, currency: string): string {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return `${currency} ${value}`;
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
+  if (!match) return `${currency} ${value}`;
+
+  const negative = match[1] === '-';
+  let integer = match[2].replace(/^0+(?=\d)/, '');
+  const fraction = match[3] ?? '';
+  let paise = `${fraction}00`.slice(0, 2);
+
+  if ((fraction[2] ?? '0') >= '5') {
+    const first = paise.charCodeAt(0);
+    const second = paise.charCodeAt(1);
+    if (second < 57) {
+      paise = `${paise[0]}${String.fromCharCode(second + 1)}`;
+    } else if (first < 57) {
+      paise = `${String.fromCharCode(first + 1)}0`;
+    } else {
+      integer = incrementInteger(integer);
+      paise = '00';
+    }
+  }
+
+  const groupedInteger = integer.length > 3
+    ? `${integer.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${integer.slice(-3)}`
+    : integer;
+  const symbol = currency === 'INR' ? '₹' : `${currency} `;
+  const sign = negative && (/[1-9]/.test(integer) || paise !== '00') ? '−' : '';
+  return `${sign}${symbol}${groupedInteger}.${paise}`;
+}
+
+function incrementInteger(value: string): string {
+  const digits = value.split('');
+  for (let index = digits.length - 1; index >= 0; index -= 1) {
+    if (digits[index] !== '9') {
+      digits[index] = String.fromCharCode(digits[index].charCodeAt(0) + 1);
+      return digits.join('');
+    }
+    digits[index] = '0';
+  }
+  return `1${digits.join('')}`;
 }
 
 function accountTypeLabel(type: ManagedAccountType): string {
@@ -91,7 +122,7 @@ export default function AccountsScreen(): React.JSX.Element {
   const archiveAccount = (account: ManagedAccount): void => {
     Alert.alert(
       'Archive account?',
-      `${account.displayName} will be removed from your active account list.`,
+      `${account.name} will be removed from your active account list.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -185,22 +216,31 @@ export default function AccountsScreen(): React.JSX.Element {
             <SurfaceCard key={account.id} style={styles.accountCard}>
               <View style={styles.accountHeader}>
                 <View style={[styles.accountIcon, { backgroundColor: colors.surfaceRaised }]}>
-                  <AccountTypeIcon type={account.accountType} />
+                  <AccountTypeIcon type={account.type} />
                 </View>
                 <View style={styles.accountIdentity}>
                   <Text style={[styles.bankName, { color: colors.muted }]} numberOfLines={1}>
-                    {account.bankName || accountTypeLabel(account.accountType)}
+                    {account.institutionName || accountTypeLabel(account.type)}
                   </Text>
                   <Text style={[styles.displayName, { color: colors.text }]} numberOfLines={1}>
-                    {account.displayName}
+                    {account.name}
                   </Text>
                   <Text style={[styles.accountType, { color: colors.subtle }]}>
-                    {accountTypeLabel(account.accountType)}
+                    {account.type === 'credit_card' ? 'Liability · Credit card' : `Asset · ${accountTypeLabel(account.type)}`}
                   </Text>
+                  {account.maskedNumber ? (
+                    <Text style={[styles.accountType, { color: colors.subtle }]}>
+                      •••• {account.maskedNumber} · {account.source === 'statement_reported' ? 'Statement reported' : 'Entered by you'}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.accountType, { color: colors.subtle }]}>
+                      {account.source === 'statement_reported' ? 'Statement reported' : 'Entered by you'}
+                    </Text>
+                  )}
                 </View>
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityLabel={`Archive ${account.displayName}`}
+                  accessibilityLabel={`Archive ${account.name}`}
                   onPress={() => archiveAccount(account)}
                   style={styles.moreButton}
                 >
@@ -208,7 +248,9 @@ export default function AccountsScreen(): React.JSX.Element {
                 </TouchableOpacity>
               </View>
               <View style={[styles.balanceRow, { borderTopColor: colors.border }]}>
-                <Text style={[styles.balanceLabel, { color: colors.muted }]}>Current balance</Text>
+                <Text style={[styles.balanceLabel, { color: colors.muted }]}>
+                  {account.type === 'credit_card' ? 'Amount owed' : 'Current balance'}
+                </Text>
                 <Text style={[styles.balanceValue, { color: colors.text }]}>
                   {formatBalance(account.currentBalance, account.currency)}
                 </Text>

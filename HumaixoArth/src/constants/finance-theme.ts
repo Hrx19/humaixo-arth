@@ -1,4 +1,5 @@
 import { useThemeStore } from '@/store/themeStore';
+import Decimal from 'decimal.js';
 
 const DARK_COLORS = {
   background: '#090910',
@@ -51,13 +52,15 @@ export const FinanceTheme = {
   },
 } as const;
 
-export function formatINR(amount: number, includeSign = false): string {
-  const formatted = Math.abs(amount).toLocaleString('en-IN', {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 0,
-  });
-  const sign = includeSign ? (amount < 0 ? '−' : '+') : '';
-  return `${sign}₹${formatted}`;
+export function formatINR(amount: string | number, includeSign = false): string {
+  const decimal = new Decimal(String(amount));
+  const absolute = decimal.abs().toFixed(2).replace(/\.?0+$/, '');
+  const [whole = '0', fraction] = absolute.split('.');
+  const grouped = whole.length <= 3
+    ? whole
+    : `${whole.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${whole.slice(-3)}`;
+  const sign = includeSign ? (decimal.isNegative() ? '−' : '+') : decimal.isNegative() ? '−' : '';
+  return `${sign}₹${grouped}${fraction ? `.${fraction}` : ''}`;
 }
 
 export function formatDate(value: string | null | undefined): string {

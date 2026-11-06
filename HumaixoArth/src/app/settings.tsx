@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Decimal from 'decimal.js';
 import { Alert, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { FinanceScreen } from '@/components/finance-screen';
 import { PrimaryButton, SurfaceCard } from '@/components/finance-ui';
@@ -16,7 +17,7 @@ export default function SettingsScreen(): React.JSX.Element {
   const setMode = useThemeStore((state) => state.setMode);
   const [hideBalances, setHideBalances] = useState(false);
   const [budgetAmount, setBudgetAmount] = useState('');
-  const [budgetSpent, setBudgetSpent] = useState<number | null>(null);
+  const [budgetSpent, setBudgetSpent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingBudget, setSavingBudget] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
@@ -75,16 +76,15 @@ export default function SettingsScreen(): React.JSX.Element {
       Alert.alert('Sign in required', 'Sign in to set a monthly spending budget.');
       return;
     }
-    const amount = Number(budgetAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!/^\d+(?:\.\d{1,2})?$/.test(budgetAmount) || !new Decimal(budgetAmount).isPositive()) {
       Alert.alert('Enter a valid budget', 'Your monthly budget must be greater than zero.');
       return;
     }
     setSavingBudget(true);
     try {
-      const saved = await FinanceService.setBudget(token, amount);
+      const saved = await FinanceService.setBudget(token, budgetAmount);
       setBudgetSpent(saved.spent);
-      Alert.alert('Budget saved', `Your monthly limit is ${formatINR(saved.amount ?? amount)}.`);
+      Alert.alert('Budget saved', `Your monthly limit is ${formatINR(saved.amount ?? budgetAmount)}.`);
     } catch (error) {
       Alert.alert('Could not save budget', error instanceof Error ? error.message : 'Please try again.');
     } finally {

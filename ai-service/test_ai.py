@@ -22,5 +22,5 @@ def test_ai_service_parses_a_live_sample():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["amount"] == 450.0
-    assert payload["balanceAfter"] == 12450.5
+    assert payload["amount"] == "450"
+    assert payload["balanceAfter"] == "12450.5"

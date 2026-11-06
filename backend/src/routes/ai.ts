@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { createHash } from 'node:crypto';
 import { Router } from 'express';
+import Decimal from 'decimal.js';
 import { Types } from 'mongoose';
 import { z } from 'zod';
 import { AccountModel } from '../../models/Account';
@@ -9,6 +10,8 @@ import { logger } from '../config/logger';
 import { verifyToken } from '../middleware/verifyToken';
 import { TransactionModel } from '../../models/Transaction';
 import { getAccountBalanceAt } from '../services/account-balances';
+import { decimal128 } from '../services/money';
+import { findOrCreateCategory, findOrCreatePerson } from '../services/financial-directory';
 
 const parseRequestSchema = z.object({
   sms: z.string().trim().min(10).max(1_000),
@@ -17,13 +20,14 @@ const parseRequestSchema = z.object({
 
 const parsedTransactionSchema = z.object({
   success: z.boolean().optional(),
-  amount: z.number().finite().positive(),
+  amount: z.string().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/)
+    .refine((value) => new Decimal(value).isPositive()),
   currency: z.string().trim().min(1).optional(),
   type: z.enum(['credit', 'debit']),
   category: z.string().trim().min(1).max(60),
   merchant: z.string().trim().min(1).max(120),
   confidence: z.number().min(0).max(1),
-  balanceAfter: z.number().finite().optional(),
+  balanceAfter: z.string().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/).optional(),
 }).strict();
 
 export const aiRouter = Router();
@@ -86,8 +90,8 @@ aiRouter.post('/', async (request, response) => {
 
     const transactionDate = new Date();
     const delta = parsedResult.data.type === 'credit'
-      ? parsedResult.data.amount
-      : -parsedResult.data.amount;
+      ? new Decimal(parsedResult.data.amount)
+      : new Decimal(parsedResult.data.amount).negated();
     const accountBalanceBefore = account
       ? await getAccountBalanceAt(
           userObjectId,
@@ -96,19 +100,27 @@ aiRouter.post('/', async (request, response) => {
         )
       : undefined;
     const balanceBefore = parsedResult.data.balanceAfter !== undefined
-      ? parsedResult.data.balanceAfter - delta
+      ? new Decimal(parsedResult.data.balanceAfter).minus(delta).toString()
       : accountBalanceBefore;
     const balanceAfter = parsedResult.data.balanceAfter ??
-      (accountBalanceBefore === undefined ? undefined : accountBalanceBefore + delta);
+      (accountBalanceBefore === undefined ? undefined : new Decimal(accountBalanceBefore).plus(delta).toString());
     const isPersonTransfer =
       parsedResult.data.category.toLowerCase() === 'transfer' &&
       parsedResult.data.merchant.toLowerCase() !== 'unknown';
     const counterparty = isPersonTransfer ? parsedResult.data.merchant : undefined;
+    const categoryId = await findOrCreateCategory(
+      userObjectId,
+      parsedResult.data.category,
+      parsedResult.data.category.toLowerCase() === 'transfer'
+        ? 'transfer'
+        : parsedResult.data.type === 'credit' ? 'income' : 'expense',
+    );
+    const personId = counterparty ? await findOrCreatePerson(userObjectId, counterparty) : undefined;
 
     const transaction = await TransactionModel.create({
       userId: userObjectId,
       accountId: account?._id,
-      amount: parsedResult.data.amount,
+      amount: decimal128(parsedResult.data.amount),
       type: parsedResult.data.type,
       category: parsedResult.data.category,
       merchant: parsedResult.data.merchant,
@@ -120,9 +132,12 @@ aiRouter.post('/', async (request, response) => {
         .trim()
         .replace(/\s+/g, ' '),
       counterpartyType: counterparty ? 'person' : undefined,
+      ...(personId ? { personId } : {}),
+      categoryId,
+      isInternalTransfer: /\b(?:self transfer|own account|own accounts|internal transfer|between my accounts)\b/i.test(parsedRequest.data.sms),
       paymentMethod: /\bUPI\b/i.test(parsedRequest.data.sms) ? 'UPI' : undefined,
-      balanceBefore,
-      balanceAfter,
+      balanceBefore: balanceBefore === undefined ? undefined : decimal128(balanceBefore),
+      balanceAfter: balanceAfter === undefined ? undefined : decimal128(balanceAfter),
       description: parsedResult.data.merchant,
       source: 'sms',
       confidence: parsedResult.data.confidence,
@@ -138,7 +153,7 @@ aiRouter.post('/', async (request, response) => {
       data: {
         id: transaction._id.toString(),
         merchant: transaction.merchant,
-        amount: transaction.amount,
+        amount: transaction.amount.toString(),
         type: transaction.type,
         category: transaction.category,
         date: (transaction.date ?? new Date()).toISOString(),
@@ -148,8 +163,8 @@ aiRouter.post('/', async (request, response) => {
         counterpartyKey: transaction.counterpartyKey ?? null,
         counterpartyType: transaction.counterpartyType ?? null,
         paymentMethod: transaction.paymentMethod ?? null,
-        balanceBefore: transaction.balanceBefore ?? null,
-        balanceAfter: transaction.balanceAfter ?? null,
+        balanceBefore: transaction.balanceBefore?.toString() ?? null,
+        balanceAfter: transaction.balanceAfter?.toString() ?? null,
         referenceNumber: transaction.referenceNumber ?? null,
         source: transaction.source ?? 'sms',
       },

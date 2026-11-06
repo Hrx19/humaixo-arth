@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Decimal from 'decimal.js';
 import {
   ActivityIndicator,
   Modal,
@@ -81,8 +82,8 @@ export default function PeopleScreen(): React.JSX.Element {
     }
   };
 
-  const totalSent = people.reduce((sum, person) => sum + person.sent, 0);
-  const totalReceived = people.reduce((sum, person) => sum + person.received, 0);
+  const totalSent = people.reduce((sum, person) => new Decimal(sum).plus(person.sent).toString(), '0');
+  const totalReceived = people.reduce((sum, person) => new Decimal(sum).plus(person.received).toString(), '0');
 
   return (
     <FinanceScreen
@@ -215,7 +216,7 @@ function TabButton({ label, active, onPress }: { label: string; active: boolean;
 
 function PersonCard({ person }: { person: PersonSummary }): React.JSX.Element {
   const initials = person.name.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('');
-  const sentMore = person.sent >= person.received;
+  const sentMore = new Decimal(person.sent).greaterThanOrEqualTo(person.received);
   return (
     <SurfaceCard style={styles.personCard}>
       <View style={styles.avatar}><Text style={styles.avatarText}>{initials || '•'}</Text></View>
@@ -224,11 +225,11 @@ function PersonCard({ person }: { person: PersonSummary }): React.JSX.Element {
         <Text style={styles.personMeta}>{person.transactionCount} transfers · last {formatShortDate(person.lastDate)}</Text>
         <View style={styles.personPills}>
           <InfoPill label={`Sent ${formatINR(person.sent)}`} tone="purple" />
-          {person.received > 0 ? <InfoPill label={`Got ${formatINR(person.received)}`} tone="green" /> : null}
+          {new Decimal(person.received).isPositive() ? <InfoPill label={`Got ${formatINR(person.received)}`} tone="green" /> : null}
         </View>
       </View>
       <View style={styles.personNetBlock}>
-        <Text style={[styles.personNet, sentMore ? styles.outgoing : styles.incoming]}>{sentMore ? '−' : '+'}{formatINR(Math.abs(person.net))}</Text>
+        <Text style={[styles.personNet, sentMore ? styles.outgoing : styles.incoming]}>{sentMore ? '−' : '+'}{formatINR(new Decimal(person.net).abs().toString())}</Text>
         <Text style={styles.personNetLabel}>net flow</Text>
         <Text style={styles.chevron}>›</Text>
       </View>

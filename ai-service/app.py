@@ -10,11 +10,12 @@ import logging
 import os
 import re
 import hmac
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -102,13 +103,20 @@ class SMSRequest(BaseModel):
 class ParsedTransaction(BaseModel):
     model_config = ConfigDict(extra="forbid")
     success: bool = True
-    amount: float = Field(gt=0, allow_inf_nan=False)
+    amount: str = Field(pattern=r"^(?:0|[1-9]\d*)(?:\.\d{1,2})?$")
     currency: str = "INR"
     type: str = Field(pattern="^(credit|debit)$")
     category: str = Field(min_length=1, max_length=60)
     merchant: str = Field(min_length=1, max_length=120)
     confidence: float = Field(ge=0, le=1)
-    balanceAfter: float | None = Field(default=None, allow_inf_nan=False)
+    balanceAfter: str | None = Field(default=None, pattern=r"^(?:0|[1-9]\d*)(?:\.\d{1,2})?$")
+
+    @field_validator("amount")
+    @classmethod
+    def amount_must_be_positive(cls, value: str) -> str:
+        if Decimal(value) <= 0:
+            raise ValueError("amount must be positive")
+        return value
 
 
 class ErrorResponse(BaseModel):
@@ -116,15 +124,20 @@ class ErrorResponse(BaseModel):
     error: str
 
 
-def parse_money(value: str) -> float | None:
+def decimal_text(value: Decimal) -> str:
+    text = format(value, "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def parse_money(value: str) -> str | None:
     try:
-        amount = float(value.replace(",", ""))
-    except (TypeError, ValueError):
+        amount = Decimal(value.replace(",", ""))
+    except (InvalidOperation, TypeError, ValueError):
         return None
-    return amount if amount > 0 else None
+    return decimal_text(amount) if amount.is_finite() and amount > 0 else None
 
 
-def extract_balance(sms_text: str) -> float | None:
+def extract_balance(sms_text: str) -> str | None:
     for pattern in BALANCE_PATTERNS:
         match = pattern.search(sms_text)
         if match:
@@ -132,7 +145,7 @@ def extract_balance(sms_text: str) -> float | None:
     return None
 
 
-def extract_transaction_amount(sms_text: str) -> tuple[float | None, float]:
+def extract_transaction_amount(sms_text: str) -> tuple[str | None, float]:
     # Bank messages commonly contain both the transaction and remaining balance.
     # Prefer the first currency amount that does not follow a balance label.
     for match in AMOUNT_PATTERN.finditer(sms_text):
@@ -216,7 +229,7 @@ def advanced_parse_sms(sms_text: str) -> dict[str, Any]:
 
     result: dict[str, Any] = {
         "success": amount is not None,
-        "amount": amount or 0.0,
+        "amount": amount or "0",
         "currency": "INR",
         "type": transaction_type,
         "category": category,

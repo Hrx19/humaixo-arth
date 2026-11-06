@@ -182,7 +182,7 @@ export const FinanceService = {
     return response.data;
   },
 
-  async setBudget(token: string, amount: number): Promise<BudgetSummary> {
+  async setBudget(token: string, amount: string): Promise<BudgetSummary> {
     const response = await requestJson<{ success: true; data: BudgetSummary }>('/api/budget', token, {
       method: 'PUT',
       body: { amount },
@@ -212,8 +212,8 @@ export const FinanceService = {
   getBalanceAt(token: string, at: string, accountId?: string) {
     return requestJson<{
       at: string;
-      balance: number;
-      byAccount: { id: string; name: string; institution: string; balance: number; currency: string }[];
+      balance: string;
+      byAccount: { id: string; name: string; institution: string; balance: string; currency: string }[];
     }>(withQuery('/api/transactions/balance-at', { at, accountId }), token);
   },
 

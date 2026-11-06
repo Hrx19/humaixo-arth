@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import Decimal from 'decimal.js';
 import mongoose, { Types } from 'mongoose';
 import { z } from 'zod';
 import { AccountModel } from '../../models/Account';
@@ -7,6 +8,7 @@ import { TransactionModel, type TransactionType } from '../../models/Transaction
 import { logger } from '../config/logger';
 import { verifyToken } from '../middleware/verifyToken';
 import { getAccountBalanceAt } from '../services/account-balances';
+import { findOrCreateCategory, findOrCreatePerson } from '../services/financial-directory';
 import { hashStatement, parseStatementCsv, type StatementCandidate } from '../services/statement-csv';
 
 const statementRequestSchema = z.object({
@@ -18,9 +20,9 @@ const statementRequestSchema = z.object({
 type ExistingLedgerEntry = {
   _id: Types.ObjectId;
   date: Date;
-  amount: number;
+  amount: Types.Decimal128;
   type: TransactionType;
-  balanceAfter?: number;
+  balanceAfter?: Types.Decimal128;
   dedupeKey?: string;
 };
 
@@ -59,8 +61,9 @@ function getIssueCounts(issues: Array<{ message: string }>): { duplicates: numbe
   );
 }
 
-function transactionDelta(type: TransactionType, amount: number): number {
-  return type === 'credit' ? amount : -amount;
+function transactionDelta(type: TransactionType, amount: string): string {
+  const value = new Decimal(amount);
+  return (type === 'credit' ? value : value.negated()).toString();
 }
 
 async function parseOwnedStatement(
@@ -300,14 +303,16 @@ statementRouter.post('/import', async (request, response) => {
       result.account,
       new Date(firstDate.getTime() - 1),
     );
-    const balancesByKey = new Map<string, { balanceBefore: number; balanceAfter: number }>();
+    const balancesByKey = new Map<string, { balanceBefore: string; balanceAfter: string }>();
 
     for (const event of events) {
       if (event.kind === 'existing') {
         if (event.entry.balanceAfter !== undefined) {
-          runningBalance = event.entry.balanceAfter;
+          runningBalance = event.entry.balanceAfter.toString();
         } else {
-          runningBalance += event.entry.type === 'credit' ? event.entry.amount : -event.entry.amount;
+          runningBalance = new Decimal(runningBalance)
+            .plus(transactionDelta(event.entry.type, event.entry.amount.toString()))
+            .toString();
         }
         continue;
       }
@@ -316,8 +321,8 @@ statementRouter.post('/import', async (request, response) => {
       const delta = transactionDelta(candidate.type, candidate.amount);
       const balanceBefore = candidate.balanceAfter === undefined
         ? runningBalance
-        : candidate.balanceAfter - delta;
-      const balanceAfter = candidate.balanceAfter ?? balanceBefore + delta;
+        : new Decimal(candidate.balanceAfter).minus(delta).toString();
+      const balanceAfter = candidate.balanceAfter ?? new Decimal(balanceBefore).plus(delta).toString();
       balancesByKey.set(candidate.dedupeKey, { balanceBefore, balanceAfter });
       runningBalance = balanceAfter;
     }
@@ -346,8 +351,23 @@ statementRouter.post('/import', async (request, response) => {
       );
       statementId = statementImport._id.toString();
 
-      const operations = result.newRows.map((candidate) => {
+      const operations = await Promise.all(result.newRows.map(async (candidate) => {
         const balance = balancesByKey.get(candidate.dedupeKey);
+        const [categoryId, personId] = await Promise.all([
+          findOrCreateCategory(
+            userObjectId,
+            candidate.category,
+            candidate.category.toLowerCase() === 'transfer'
+              ? 'transfer'
+              : candidate.type === 'credit' ? 'income' : 'expense',
+            session,
+          ),
+          findOrCreatePerson(
+            userObjectId,
+            candidate.counterpartyType === 'person' ? candidate.counterparty : null,
+            session,
+          ),
+        ]);
         return {
           updateOne: {
             filter: { userId: userObjectId, dedupeKey: candidate.dedupeKey },
@@ -355,7 +375,7 @@ statementRouter.post('/import', async (request, response) => {
               $setOnInsert: {
                 userId: userObjectId,
                 accountId: result.account._id,
-                amount: candidate.amount,
+                amount: Types.Decimal128.fromString(candidate.amount),
                 type: candidate.type,
                 category: candidate.category,
                 merchant: candidate.merchant,
@@ -364,20 +384,23 @@ statementRouter.post('/import', async (request, response) => {
                 counterpartyType: candidate.counterpartyType,
                 paymentMethod: candidate.paymentMethod,
                 date: candidate.date,
-                balanceBefore: balance?.balanceBefore,
-                balanceAfter: balance?.balanceAfter,
+                balanceBefore: balance?.balanceBefore ? Types.Decimal128.fromString(balance.balanceBefore) : undefined,
+                balanceAfter: balance?.balanceAfter ? Types.Decimal128.fromString(balance.balanceAfter) : undefined,
                 referenceNumber: candidate.referenceNumber,
                 description: candidate.description,
                 source: 'statement',
                 confidence: candidate.counterparty ? 0.85 : 0.7,
                 dedupeKey: candidate.dedupeKey,
                 statementImportId: statementImport._id,
+                categoryId,
+                ...(personId ? { personId } : {}),
+                isInternalTransfer: candidate.isInternalTransfer,
               },
             },
             upsert: true,
           },
         };
-      });
+      }));
 
       const bulkResult = await TransactionModel.bulkWrite(operations, { session, ordered: true });
       importedRows = bulkResult.upsertedCount;

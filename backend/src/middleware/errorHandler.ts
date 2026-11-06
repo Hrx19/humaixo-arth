@@ -67,6 +67,14 @@ export const errorHandler: ErrorRequestHandler = (
     statusCode = 400;
     code = 'INVALID_JSON';
     message = 'The request body contains invalid JSON.';
+  } else if (errorRecord.name === 'MulterError' && errorRecord.code === 'LIMIT_FILE_SIZE') {
+    statusCode = 413;
+    code = 'UPLOAD_TOO_LARGE';
+    message = 'Statement files must be 10 MB or smaller.';
+  } else if (errorRecord.name === 'MulterError') {
+    statusCode = 400;
+    code = 'INVALID_UPLOAD';
+    message = 'The uploaded file could not be accepted.';
   } else if (errorRecord.code === 11000) {
     statusCode = 409;
     code = 'DUPLICATE_RESOURCE';

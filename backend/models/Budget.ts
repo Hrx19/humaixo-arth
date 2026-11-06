@@ -9,7 +9,7 @@ import {
 
 export interface BudgetRecord {
   userId: Types.ObjectId;
-  amount: number;
+  amount: Types.Decimal128;
   month: number;
   year: number;
   createdAt?: Date;
@@ -28,10 +28,8 @@ const budgetSchema = new Schema<BudgetRecord>(
       index: true,
     },
     amount: {
-      type: Number,
+      type: Schema.Types.Decimal128,
       required: true,
-      min: 0.01,
-      max: 1_000_000_000_000,
     },
     month: {
       type: Number,

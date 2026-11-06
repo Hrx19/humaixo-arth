@@ -17,6 +17,17 @@ import Animated, {
 import { FinanceTheme } from '@/constants/finance-theme';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { useThemeStore } from '@/store/themeStore';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 void SplashScreen.preventAutoHideAsync().catch((error: unknown) => {
   console.error('Could not keep the native splash screen visible.', error);
@@ -49,27 +60,29 @@ export default function RootLayout(): React.JSX.Element {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <AuthProvider>
-          <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
-          {splashVisible ? (
-            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, splashStyle]}>
-              <LinearGradient
-                colors={['#241850', '#111329', '#090910']}
-                locations={[0, 0.58, 1]}
-                style={styles.splash}
-              >
-                <Animated.View entering={FadeInDown.duration(700).delay(120)} style={styles.brand}>
-                  <View style={styles.logoMark}>
-                    <Text style={styles.logoText}>H</Text>
-                  </View>
-                  <Text style={styles.brandName}>Humaixo Arth</Text>
-                  <Text style={styles.tagline}>Your money, clearly understood.</Text>
-                </Animated.View>
-                <Text style={styles.footer}>PRIVATE FINANCE · MADE SIMPLE</Text>
-              </LinearGradient>
-            </Animated.View>
-          ) : null}
-        </AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+            {splashVisible ? (
+              <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, splashStyle]}>
+                <LinearGradient
+                  colors={['#241850', '#111329', '#090910']}
+                  locations={[0, 0.58, 1]}
+                  style={styles.splash}
+                >
+                  <Animated.View entering={FadeInDown.duration(700).delay(120)} style={styles.brand}>
+                    <View style={styles.logoMark}>
+                      <Text style={styles.logoText}>H</Text>
+                    </View>
+                    <Text style={styles.brandName}>Humaixo Arth</Text>
+                    <Text style={styles.tagline}>Your money, clearly understood.</Text>
+                  </Animated.View>
+                  <Text style={styles.footer}>PRIVATE FINANCE · MADE SIMPLE</Text>
+                </LinearGradient>
+              </Animated.View>
+            ) : null}
+          </AuthProvider>
+        </QueryClientProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
   );

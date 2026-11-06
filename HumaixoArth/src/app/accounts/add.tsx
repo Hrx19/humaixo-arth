@@ -23,18 +23,24 @@ import { SurfaceCard } from '@/components/finance-ui';
 import { useFinanceColors } from '@/constants/finance-theme';
 import { AccountService, type ManagedAccountType } from '@/services/accountService';
 
-const accountTypes: { value: ManagedAccountType; label: string; description: string }[] = [
-  { value: 'savings', label: 'Savings', description: 'Personal or salary account' },
-  { value: 'current', label: 'Current', description: 'Business banking account' },
-  { value: 'credit_card', label: 'Credit card', description: 'Card balance or liability' },
-  { value: 'wallet', label: 'Wallet', description: 'Digital or prepaid wallet' },
-  { value: 'cash', label: 'Cash', description: 'Cash kept on hand' },
+const accountTypes: {
+  value: ManagedAccountType;
+  label: string;
+  description: string;
+  category: 'Asset' | 'Liability';
+}[] = [
+  { value: 'savings', label: 'Savings', description: 'Personal or salary account', category: 'Asset' },
+  { value: 'current', label: 'Current', description: 'Business banking account', category: 'Asset' },
+  { value: 'credit_card', label: 'Credit card', description: 'Card balance or liability', category: 'Liability' },
+  { value: 'wallet', label: 'Wallet', description: 'Digital or prepaid wallet', category: 'Asset' },
+  { value: 'cash', label: 'Cash', description: 'Cash kept on hand', category: 'Asset' },
 ];
 
 const addAccountSchema = z.object({
-  bankName: z.string().trim().min(1, 'Enter the bank or provider name.').max(120, 'Use 120 characters or fewer.'),
-  displayName: z.string().trim().min(1, 'Enter a name for this account.').max(100, 'Use 100 characters or fewer.'),
-  accountType: z.enum(['savings', 'current', 'cash', 'credit_card', 'wallet']),
+  institutionName: z.string().trim().min(1, 'Enter the bank or provider name.').max(120, 'Use 120 characters or fewer.'),
+  name: z.string().trim().min(1, 'Enter a name for this account.').max(100, 'Use 100 characters or fewer.'),
+  type: z.enum(['savings', 'current', 'cash', 'credit_card', 'wallet']),
+  maskedNumber: z.string().regex(/^\d{0,4}$/, 'Enter only the last four digits.'),
   openingBalance: z.string()
     .trim()
     .regex(/^-?(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, 'Enter a valid balance with up to 2 decimal places.'),
@@ -57,13 +63,14 @@ export default function AddAccountScreen(): React.JSX.Element {
   } = useForm<AddAccountForm>({
     resolver: zodResolver(addAccountSchema),
     defaultValues: {
-      bankName: '',
-      displayName: '',
-      accountType: 'savings',
+      institutionName: '',
+      name: '',
+      type: 'savings',
+      maskedNumber: '',
       openingBalance: '0',
     },
   });
-  const selectedType = useWatch({ control, name: 'accountType' });
+  const selectedType = useWatch({ control, name: 'type' });
   const selectedAccountType = accountTypes.find((type) => type.value === selectedType) ?? accountTypes[0];
 
   const submit = handleSubmit(async (values) => {
@@ -75,9 +82,10 @@ export default function AddAccountScreen(): React.JSX.Element {
     setSaving(true);
     try {
       await AccountService.createAccount({
-        bankName: values.bankName.trim(),
-        displayName: values.displayName.trim(),
-        accountType: values.accountType,
+        institutionName: values.institutionName.trim(),
+        name: values.name.trim(),
+        type: values.type,
+        ...(values.maskedNumber ? { maskedNumber: values.maskedNumber } : {}),
         openingBalance: values.openingBalance.trim(),
         currency: 'INR',
       });
@@ -111,18 +119,27 @@ export default function AddAccountScreen(): React.JSX.Element {
 
             <FormField
               control={control}
-              name="bankName"
+              name="institutionName"
               label="Bank or provider"
               placeholder="e.g. HDFC Bank"
-              error={errors.bankName?.message}
+              error={errors.institutionName?.message}
               colors={colors}
             />
             <FormField
               control={control}
-              name="displayName"
+              name="name"
               label="Display name"
               placeholder="e.g. Everyday Savings"
-              error={errors.displayName?.message}
+              error={errors.name?.message}
+              colors={colors}
+            />
+            <FormField
+              control={control}
+              name="maskedNumber"
+              label="Last four digits (optional)"
+              placeholder="0000"
+              keyboardType="number-pad"
+              error={errors.maskedNumber?.message}
               colors={colors}
             />
 
@@ -130,19 +147,21 @@ export default function AddAccountScreen(): React.JSX.Element {
               <Text style={[styles.fieldLabel, { color: colors.text }]}>Account type</Text>
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel={`Account type, ${selectedAccountType.label}`}
-                accessibilityHint="Choose an account type"
+                accessibilityLabel={`${selectedAccountType.category} account type, ${selectedAccountType.label}`}
+                accessibilityHint="Choose an asset account or a credit card liability"
                 onPress={() => setTypePickerVisible(true)}
                 style={[styles.selectButton, { backgroundColor: colors.background, borderColor: colors.border }]}
               >
                 <View style={styles.selectTextGroup}>
                   <Text style={[styles.selectLabel, { color: colors.text }]}>{selectedAccountType.label}</Text>
-                  <Text style={[styles.selectDescription, { color: colors.muted }]}>{selectedAccountType.description}</Text>
+                  <Text style={[styles.selectDescription, { color: selectedAccountType.category === 'Liability' ? colors.red : colors.green }]}>
+                    {selectedAccountType.category} · {selectedAccountType.description}
+                  </Text>
                 </View>
                 <ChevronDown size={19} color={colors.muted} />
               </TouchableOpacity>
-              {errors.accountType?.message ? (
-                <Text accessibilityRole="alert" style={[styles.fieldError, { color: colors.red }]}>{errors.accountType.message}</Text>
+              {errors.type?.message ? (
+                <Text accessibilityRole="alert" style={[styles.fieldError, { color: colors.red }]}>{errors.type.message}</Text>
               ) : null}
             </View>
 
@@ -201,7 +220,7 @@ export default function AddAccountScreen(): React.JSX.Element {
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   onPress={() => {
-                    setValue('accountType', type.value, { shouldValidate: true });
+                    setValue('type', type.value, { shouldValidate: true });
                     setTypePickerVisible(false);
                   }}
                   style={[
@@ -211,7 +230,15 @@ export default function AddAccountScreen(): React.JSX.Element {
                   ]}
                 >
                   <View style={styles.typeOptionCopy}>
-                    <Text style={[styles.typeOptionLabel, { color: colors.text }]}>{type.label}</Text>
+                    <View style={styles.typeOptionHeading}>
+                      <Text style={[styles.typeOptionLabel, { color: colors.text }]}>{type.label}</Text>
+                      <Text style={[
+                        styles.typeCategory,
+                        { color: type.category === 'Liability' ? colors.red : colors.green },
+                      ]}>
+                        {type.category}
+                      </Text>
+                    </View>
                     <Text style={[styles.typeOptionDescription, { color: colors.muted }]}>{type.description}</Text>
                   </View>
                   {selected ? <Check size={18} color={colors.primarySoft} /> : null}
@@ -250,10 +277,10 @@ function FormField({
   helper,
 }: {
   control: ReturnType<typeof useForm<AddAccountForm>>['control'];
-  name: 'bankName' | 'displayName' | 'openingBalance';
+  name: 'institutionName' | 'name' | 'maskedNumber' | 'openingBalance';
   label: string;
   placeholder: string;
-  keyboardType?: 'default' | 'decimal-pad';
+  keyboardType?: 'default' | 'decimal-pad' | 'number-pad';
   error?: string;
   colors: ReturnType<typeof useFinanceColors>;
   leftAdornment?: React.ReactNode;
@@ -281,7 +308,8 @@ function FormField({
               placeholder={placeholder}
               placeholderTextColor={colors.subtle}
               keyboardType={keyboardType}
-              autoCapitalize={name === 'openingBalance' ? 'none' : 'words'}
+              maxLength={name === 'maskedNumber' ? 4 : undefined}
+              autoCapitalize={name === 'openingBalance' || name === 'maskedNumber' ? 'none' : 'words'}
               style={[styles.input, { color: colors.text }]}
             />
           </View>
@@ -347,7 +375,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   typeOptionCopy: { gap: 3 },
+  typeOptionHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   typeOptionLabel: { fontSize: 13, fontWeight: '700' },
+  typeCategory: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   typeOptionDescription: { fontSize: 11 },
   toast: {
     position: 'absolute',

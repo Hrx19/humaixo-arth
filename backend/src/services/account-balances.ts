@@ -1,4 +1,5 @@
-import { Types } from 'mongoose';
+import Decimal from 'decimal.js';
+import { Types, type ClientSession } from 'mongoose';
 import { AccountModel, type AccountDocument, type AccountRecord } from '../../models/Account';
 import { TransactionModel, type TransactionType } from '../../models/Transaction';
 
@@ -9,118 +10,107 @@ type AccountBalanceSource = Pick<AccountRecord, 'openingBalance' | 'openingBalan
 type BalanceSnapshot = {
   _id: Types.ObjectId;
   date: Date;
-  balanceAfter: number;
+  balanceAfter: Types.Decimal128;
 };
 
-type SignedAmountAggregate = {
-  _id: null;
-  total: number;
-};
-
+type SignedAmountAggregate = { _id: null; total: Types.Decimal128 };
 type BalanceEvent = {
   accountId: string;
   date: Date;
   order: number;
   type: TransactionType | 'opening';
-  amount: number;
-  balanceAfter?: number;
+  amount: string;
+  balanceAfter?: string;
   id?: string;
 };
 
-function signedAmountExpression(): Record<string, unknown> {
-  return {
-    $cond: [
-      { $eq: ['$type', 'credit'] },
-      '$amount',
-      { $multiply: ['$amount', -1] },
-    ],
-  };
-}
+const ZERO = '0';
 
 async function sumTransactionChanges(
   userId: Types.ObjectId,
   accountId: Types.ObjectId,
   dateFilter: Record<string, unknown>,
-): Promise<number> {
-  const [result] = await TransactionModel.aggregate<SignedAmountAggregate>([
-    {
-      $match: {
-        userId,
-        accountId,
-        ...dateFilter,
-      },
-    },
+  session?: ClientSession,
+): Promise<string> {
+  const amount = { $convert: { input: '$amount', to: 'decimal' } };
+  const aggregate = TransactionModel.aggregate<SignedAmountAggregate>([
+    { $match: { userId, accountId, ...dateFilter } },
     {
       $group: {
         _id: null,
-        total: { $sum: signedAmountExpression() },
+        total: {
+          $sum: {
+            $cond: [
+              { $eq: ['$type', 'credit'] },
+              amount,
+              { $multiply: [amount, Types.Decimal128.fromString('-1')] },
+            ],
+          },
+        },
       },
     },
   ]);
-
-  return result?.total ?? 0;
+  if (session) aggregate.session(session);
+  const [result] = await aggregate;
+  return result?.total.toString() ?? ZERO;
 }
 
 export async function getAccountBalanceAt(
   userId: Types.ObjectId,
   account: AccountBalanceSource | AccountDocument,
   at: Date,
-): Promise<number> {
-  const snapshot = await TransactionModel.findOne({
+  session?: ClientSession,
+): Promise<string> {
+  const snapshotQuery = TransactionModel.findOne({
     userId,
     accountId: account._id,
     date: { $lte: at },
     balanceAfter: { $exists: true, $ne: null },
+    source: 'statement',
   })
     .select('_id date balanceAfter')
-    .sort({ date: -1, _id: -1 })
-    .lean<BalanceSnapshot>();
+    .sort({ date: -1, _id: -1 });
+  if (session) snapshotQuery.session(session);
+  const snapshot = await snapshotQuery.lean<BalanceSnapshot>();
 
   if (snapshot) {
     const laterTransactions = await sumTransactionChanges(userId, account._id, {
-      date: { $lte: at },
       $or: [
-        { date: { $gt: snapshot.date } },
+        { date: { $gt: snapshot.date, $lte: at } },
         { date: snapshot.date, _id: { $gt: snapshot._id } },
       ],
-    });
-    return snapshot.balanceAfter + laterTransactions;
+    }, session);
+    return new Decimal(snapshot.balanceAfter.toString()).plus(laterTransactions).toString();
   }
 
-  // A statement can provide an authoritative balance before the opening
-  // baseline entered in the UI, so only fall back to zero after checking it.
-  if (account.openingBalanceDate > at) return 0;
-
-  const changesSinceOpening = await sumTransactionChanges(userId, account._id, {
+  if (account.openingBalanceDate > at) return ZERO;
+  const changes = await sumTransactionChanges(userId, account._id, {
     date: { $gte: account.openingBalanceDate, $lte: at },
-  });
-  return account.openingBalance + changesSinceOpening;
+  }, session);
+  return new Decimal(account.openingBalance.toString()).plus(changes).toString();
 }
 
 export async function getUserAccountBalances(
   userId: Types.ObjectId,
   at = new Date(),
   requestedAccountId?: Types.ObjectId,
-): Promise<Array<{ account: AccountDocument; balance: number }>> {
+): Promise<Array<{ account: AccountDocument; balance: string }>> {
   const accounts = await AccountModel.find({
     userId,
     isArchived: false,
     ...(requestedAccountId ? { _id: requestedAccountId } : {}),
   }).sort({ createdAt: 1 });
-
-  return Promise.all(
-    accounts.map(async (account) => ({
-      account,
-      balance: await getAccountBalanceAt(userId, account, at),
-    })),
-  );
+  return Promise.all(accounts.map(async (account) => ({
+    account,
+    balance: await getAccountBalanceAt(userId, account, at),
+  })));
 }
 
 export async function getMonthlyBalanceHistory(
   userId: Types.ObjectId,
   months: number,
   requestedAccountId?: Types.ObjectId,
-): Promise<Array<{ date: string; balance: number }>> {
+): Promise<Array<{ date: string; balance: string }>> {
   const now = new Date();
   const firstMonth = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
   const accounts = await AccountModel.find({
@@ -129,46 +119,37 @@ export async function getMonthlyBalanceHistory(
     ...(requestedAccountId ? { _id: requestedAccountId } : {}),
   }).sort({ createdAt: 1 });
 
-  if (accounts.length === 0) {
-    return Array.from({ length: months }, (_, index) => {
-      const date = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + index, 1);
-      return { date: date.toISOString(), balance: 0 };
-    });
-  }
-
-  const baselineBalances = new Map<string, number>();
-  const events: BalanceEvent[] = [];
   const baselineDate = new Date(firstMonth.getTime() - 1);
-  const accountBaselines = await Promise.all(
-    accounts.map(async (account) => ({
-      account,
-      balance: await getAccountBalanceAt(userId, account, baselineDate),
-    })),
-  );
+  const baselines = await Promise.all(accounts.map(async (account) => ({
+    account,
+    balance: await getAccountBalanceAt(userId, account, baselineDate),
+  })));
+  const balances = new Map(baselines.map(({ account, balance }) => [account._id.toString(), balance]));
+  const accountIds = accounts.map((account) => account._id);
+  const transactions = accountIds.length
+    ? await TransactionModel.find({
+      userId,
+      accountId: { $in: accountIds },
+      date: { $gte: firstMonth, $lte: now },
+      status: { $ne: 'failed' },
+    })
+      .select('_id accountId amount type date balanceAfter')
+      .sort({ date: 1, _id: 1 })
+      .lean()
+    : [];
+  const events: BalanceEvent[] = [];
 
-  for (const { account, balance } of accountBaselines) {
-    const key = account._id.toString();
-    baselineBalances.set(key, balance);
+  for (const { account } of baselines) {
     if (account.openingBalanceDate >= firstMonth && account.openingBalanceDate <= now) {
       events.push({
-        accountId: key,
+        accountId: account._id.toString(),
         date: account.openingBalanceDate,
         order: 0,
         type: 'opening',
-        amount: account.openingBalance,
+        amount: account.openingBalance.toString(),
       });
     }
   }
-
-  const transactions = await TransactionModel.find({
-    userId,
-    accountId: { $in: accounts.map((account) => account._id) },
-    date: { $gte: firstMonth, $lte: now },
-  })
-    .select('_id accountId amount type date balanceAfter')
-    .sort({ date: 1, _id: 1 })
-    .lean();
-
   for (const transaction of transactions) {
     if (!transaction.accountId || !transaction.date) continue;
     events.push({
@@ -176,55 +157,39 @@ export async function getMonthlyBalanceHistory(
       date: transaction.date,
       order: 1,
       type: transaction.type,
-      amount: transaction.amount,
-      balanceAfter: transaction.balanceAfter,
+      amount: transaction.amount.toString(),
+      balanceAfter: transaction.balanceAfter?.toString(),
       id: transaction._id.toString(),
     });
   }
-
-  events.sort((left, right) => {
-    const dateDifference = left.date.getTime() - right.date.getTime();
-    if (dateDifference !== 0) return dateDifference;
-    if (left.order !== right.order) return left.order - right.order;
-    return (left.id ?? '').localeCompare(right.id ?? '');
-  });
+  events.sort((left, right) =>
+    left.date.getTime() - right.date.getTime() ||
+    left.order - right.order ||
+    (left.id ?? '').localeCompare(right.id ?? ''),
+  );
 
   let eventIndex = 0;
-  const results: Array<{ date: string; balance: number }> = [];
-
+  const results: Array<{ date: string; balance: string }> = [];
   for (let offset = 0; offset < months; offset += 1) {
     const monthDate = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + offset, 1);
-    const monthEnd = new Date(
-      monthDate.getFullYear(),
-      monthDate.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
-    );
+    const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59, 999);
     const boundary = monthEnd > now ? now : monthEnd;
-
     while (eventIndex < events.length && events[eventIndex].date <= boundary) {
       const event = events[eventIndex];
-      const previousBalance = baselineBalances.get(event.accountId) ?? 0;
-      if (event.type === 'opening') {
-        baselineBalances.set(event.accountId, event.amount);
-      } else if (event.balanceAfter !== undefined) {
-        baselineBalances.set(event.accountId, event.balanceAfter);
-      } else {
-        const delta = event.type === 'credit' ? event.amount : -event.amount;
-        baselineBalances.set(event.accountId, previousBalance + delta);
+      const previous = balances.get(event.accountId) ?? ZERO;
+      if (event.type === 'opening') balances.set(event.accountId, event.amount);
+      else if (event.balanceAfter !== undefined) balances.set(event.accountId, event.balanceAfter);
+      else {
+        const signed = event.type === 'credit' ? event.amount : new Decimal(event.amount).negated().toString();
+        balances.set(event.accountId, new Decimal(previous).plus(signed).toString());
       }
       eventIndex += 1;
     }
-
-    const balance = Array.from(baselineBalances.values()).reduce(
-      (total, accountBalance) => total + accountBalance,
-      0,
+    const total = [...balances.values()].reduce(
+      (sum, accountBalance) => sum.plus(accountBalance),
+      new Decimal(ZERO),
     );
-    results.push({ date: boundary.toISOString(), balance });
+    results.push({ date: boundary.toISOString(), balance: total.toString() });
   }
-
   return results;
 }

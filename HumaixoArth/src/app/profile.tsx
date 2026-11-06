@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Decimal from 'decimal.js';
 import { ActivityIndicator, Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/auth-context';
@@ -57,8 +58,8 @@ export default function ProfileScreen(): React.JSX.Element {
     }
   };
 
-  const savingsRate = analytics && analytics.totals.income > 0
-    ? Math.round(((analytics.totals.income - analytics.totals.expense) / analytics.totals.income) * 100)
+  const savingsRate = analytics && new Decimal(analytics.totals.income).isPositive()
+    ? new Decimal(analytics.totals.income).minus(analytics.totals.expense).dividedBy(analytics.totals.income).mul(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toFixed(0)
     : null;
 
   return (

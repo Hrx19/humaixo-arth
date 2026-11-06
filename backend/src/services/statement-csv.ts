@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
+import Decimal from 'decimal.js';
 import type { TransactionType } from '../../models/Transaction';
 
 export type StatementCandidate = {
-  amount: number;
+  amount: string;
   type: TransactionType;
   date: Date;
   merchant: string;
@@ -10,9 +11,10 @@ export type StatementCandidate = {
   counterparty?: string;
   counterpartyKey?: string;
   counterpartyType?: 'person' | 'merchant' | 'other';
+  isInternalTransfer: boolean;
   paymentMethod?: string;
-  balanceBefore?: number;
-  balanceAfter?: number;
+  balanceBefore?: string;
+  balanceAfter?: string;
   referenceNumber?: string;
   description: string;
   dedupeKey: string;
@@ -174,7 +176,7 @@ function parseDate(value: string): Date {
   return parsed;
 }
 
-function parseMoney(value: string): number | undefined {
+function parseMoney(value: string): string | undefined {
   const cleaned = value
     .replace(/[₹$€£]/g, '')
     .replace(/\b(?:INR|Rs\.?|DR|CR)\b/gi, '')
@@ -184,9 +186,9 @@ function parseMoney(value: string): number | undefined {
 
   const parenthesized = cleaned.startsWith('(') && cleaned.endsWith(')');
   const normalized = cleaned.replace(/[()\s]/g, '');
-  const amount = Number(normalized);
-  if (!Number.isFinite(amount)) throw new Error('Amount is not numeric.');
-  return parenthesized ? -Math.abs(amount) : amount;
+  if (!/^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(normalized)) throw new Error('Amount is not numeric.');
+  const amount = new Decimal(normalized);
+  return (parenthesized ? amount.abs().negated() : amount).toString();
 }
 
 function parseDirection(value: string): TransactionType | undefined {
@@ -272,37 +274,38 @@ function parseRow(
   const debitValue = parseMoney(readCell(row, columns.debit));
   const creditValue = parseMoney(readCell(row, columns.credit));
   let type: TransactionType;
-  let amount: number;
+  let amount: string;
 
   if (columns.debit !== undefined || columns.credit !== undefined) {
-    const debitAmount = Math.abs(debitValue ?? 0);
-    const creditAmount = Math.abs(creditValue ?? 0);
-    if (debitAmount > 0 && creditAmount > 0) {
+    const debitAmount = new Decimal(debitValue ?? '0').abs();
+    const creditAmount = new Decimal(creditValue ?? '0').abs();
+    if (debitAmount.isPositive() && creditAmount.isPositive()) {
       throw new Error('Row has both a debit and credit amount.');
     }
-    if (debitAmount === 0 && creditAmount === 0) {
+    if (debitAmount.isZero() && creditAmount.isZero()) {
       throw new Error('Debit/Credit amount is missing or zero.');
     }
-    type = debitAmount > 0 ? 'debit' : 'credit';
-    amount = debitAmount > 0 ? debitAmount : creditAmount;
+    type = debitAmount.isPositive() ? 'debit' : 'credit';
+    amount = (debitAmount.isPositive() ? debitAmount : creditAmount).toString();
   } else {
     const rawAmount = parseMoney(readCell(row, columns.amount));
-    if (rawAmount === undefined || rawAmount === 0) throw new Error('Amount is missing or zero.');
+    if (rawAmount === undefined || new Decimal(rawAmount).isZero()) throw new Error('Amount is missing or zero.');
     const direction = parseDirection(readCell(row, columns.direction));
-    if (!direction && rawAmount > 0) throw new Error('Transaction type must be Debit or Credit.');
-    type = direction ?? (rawAmount < 0 ? 'debit' : 'credit');
-    amount = Math.abs(rawAmount);
+    if (!direction && new Decimal(rawAmount).isPositive()) throw new Error('Transaction type must be Debit or Credit.');
+    type = direction ?? (new Decimal(rawAmount).isNegative() ? 'debit' : 'credit');
+    amount = new Decimal(rawAmount).abs().toString();
   }
 
   const balanceAfterValue = parseMoney(readCell(row, columns.balance));
   const balanceAfter = balanceAfterValue;
-  const signedAmount = type === 'credit' ? amount : -amount;
-  const balanceBefore = balanceAfter === undefined ? undefined : balanceAfter - signedAmount;
+  const signedAmount = type === 'credit' ? new Decimal(amount) : new Decimal(amount).negated();
+  const balanceBefore = balanceAfter === undefined ? undefined : new Decimal(balanceAfter).minus(signedAmount).toString();
   const explicitCounterparty = readCell(row, columns.counterparty);
   const counterparty = guessCounterparty(description, explicitCounterparty);
   const isTransfer = /\b(UPI|IMPS|NEFT|RTGS|P2P|TRANSFER|SENT TO|RECEIVED FROM)\b/i.test(
     description,
   );
+  const isInternalTransfer = /\b(?:self transfer|own account|own accounts|internal transfer|between my accounts)\b/i.test(description);
   const counterpartyKey = counterparty ? normalizeCounterparty(counterparty) : undefined;
   const referenceNumber = readCell(row, columns.reference).slice(0, 120) || undefined;
   const category = guessCategory(
@@ -321,10 +324,10 @@ function parseRow(
     accountId,
     date.toISOString(),
     type,
-    amount.toFixed(2),
+    new Decimal(amount).toFixed(2),
     counterpartyKey ?? normalizeCounterparty(description),
     referenceNumber ?? '',
-    balanceAfter?.toFixed(2) ?? '',
+    balanceAfter ? new Decimal(balanceAfter).toFixed(2) : '',
   ].join('|');
   const dedupeKey = createHash('sha256').update(stableIdentity).digest('hex');
 
@@ -338,6 +341,7 @@ function parseRow(
     counterparty,
     counterpartyKey,
     counterpartyType,
+    isInternalTransfer,
     paymentMethod,
     balanceBefore,
     balanceAfter,

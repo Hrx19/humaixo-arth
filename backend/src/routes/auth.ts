@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Router, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
@@ -148,14 +149,33 @@ authRouter.get('/callback/github', (request, response) => {
     });
   }
 
-  const appRedirect = new URL(env.GITHUB_MOBILE_REDIRECT_URI);
-  appRedirect.searchParams.set('state', state);
-  if (code) appRedirect.searchParams.set('code', code);
-  if (error) appRedirect.searchParams.set('error', error);
-  if (errorDescription) appRedirect.searchParams.set('error_description', errorDescription);
+  const redirectParams = new URLSearchParams();
+  redirectParams.set('state', state);
+  if (code) redirectParams.set('code', code);
+  if (error) redirectParams.set('error', error);
+  if (errorDescription) redirectParams.set('error_description', errorDescription);
+  const deepLink = `${env.GITHUB_MOBILE_REDIRECT_URI}?${redirectParams.toString()}`;
+
+  const redirectScript = `\n    window.location.href = ${JSON.stringify(deepLink).replace(/</g, '\\u003c')};\n  `;
+  const scriptHash = createHash('sha256').update(redirectScript).digest('base64');
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Redirecting...</title>
+</head>
+<body>
+  <script>${redirectScript}</script>
+  <p>Redirecting to app...</p>
+</body>
+</html>`;
 
   response.set('Cache-Control', 'no-store');
-  return response.redirect(302, appRedirect.toString());
+  response.set(
+    'Content-Security-Policy',
+    `default-src 'none'; script-src 'sha256-${scriptHash}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+  );
+  return response.type('html').send(html);
 });
 
 authRouter.post('/register', async (request, response) => {

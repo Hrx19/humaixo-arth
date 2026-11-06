@@ -16,6 +16,14 @@ export interface StatementImportRecord {
   importedRows: number;
   duplicateRows: number;
   rejectedRows: number;
+  status: 'pending_review' | 'confirmed';
+  parserVersion: string;
+  storageKey?: string;
+  normalizedRows: unknown[];
+  import_logs: unknown[];
+  corrections: unknown[];
+  confirmedAt?: Date;
+  result?: Record<string, unknown>;
   periodStart?: Date;
   periodEnd?: Date;
   createdAt?: Date;
@@ -53,6 +61,19 @@ const statementImportSchema = new Schema<StatementImportRecord>(
     importedRows: { type: Number, required: true, min: 0 },
     duplicateRows: { type: Number, required: true, min: 0 },
     rejectedRows: { type: Number, required: true, min: 0 },
+    status: {
+      type: String,
+      enum: ['pending_review', 'confirmed'],
+      default: 'pending_review',
+      required: true,
+    },
+    parserVersion: { type: String, required: true, default: 'csv-v1' },
+    storageKey: { type: String, select: false },
+    normalizedRows: { type: [Schema.Types.Mixed], default: [] },
+    import_logs: { type: [Schema.Types.Mixed], default: [] },
+    corrections: { type: [Schema.Types.Mixed], default: [] },
+    confirmedAt: Date,
+    result: { type: Schema.Types.Mixed },
     periodStart: Date,
     periodEnd: Date,
   },

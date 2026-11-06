@@ -16,6 +16,8 @@ export type AccountType =
   | 'cash'
   | 'investment';
 
+export type AccountSource = 'user_entered' | 'statement_reported';
+
 export interface AccountRecord {
   userId: Types.ObjectId;
   name: string;
@@ -23,10 +25,12 @@ export interface AccountRecord {
   type: AccountType;
   accountSuffix?: string;
   currency: string;
-  openingBalance: number;
+  openingBalance: Types.Decimal128;
+  currentBalance?: Types.Decimal128;
   openingBalanceDate: Date;
   color: string;
   isArchived: boolean;
+  source: AccountSource;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -74,11 +78,12 @@ const accountSchema = new Schema<AccountRecord>(
       required: true,
     },
     openingBalance: {
-      type: Number,
+      type: Schema.Types.Decimal128,
       required: true,
-      min: -1_000_000_000_000,
-      max: 1_000_000_000_000,
-      default: 0,
+      default: () => Types.Decimal128.fromString('0'),
+    },
+    currentBalance: {
+      type: Schema.Types.Decimal128,
     },
     openingBalanceDate: {
       type: Date,
@@ -93,6 +98,12 @@ const accountSchema = new Schema<AccountRecord>(
     isArchived: {
       type: Boolean,
       default: false,
+      required: true,
+    },
+    source: {
+      type: String,
+      enum: ['user_entered', 'statement_reported'],
+      default: 'user_entered',
       required: true,
     },
   },

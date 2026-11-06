@@ -7,6 +7,8 @@ export type AccountType =
   | 'cash'
   | 'investment';
 
+export type AccountSource = 'user_entered' | 'statement_reported';
+
 export type TransactionType = 'credit' | 'debit';
 export type TransactionSource = 'manual' | 'sms' | 'statement';
 
@@ -17,10 +19,11 @@ export type FinanceAccount = {
   type: AccountType;
   accountSuffix: string;
   currency: string;
-  openingBalance: number;
+  openingBalance: string;
   openingBalanceDate: string;
-  balance: number;
+  balance: string;
   color: string;
+  source: AccountSource;
   createdAt: string;
 };
 
@@ -28,7 +31,7 @@ export type FinanceTransaction = {
   id: string;
   accountId: string | null;
   merchant: string;
-  amount: number;
+  amount: string;
   type: TransactionType;
   category: string;
   counterparty: string | null;
@@ -36,8 +39,8 @@ export type FinanceTransaction = {
   counterpartyType: 'person' | 'merchant' | 'other' | null;
   paymentMethod: string | null;
   date: string;
-  balanceBefore: number | null;
-  balanceAfter: number | null;
+  balanceBefore: string | null;
+  balanceAfter: string | null;
   referenceNumber: string | null;
   note: string | null;
   source: TransactionSource;
@@ -46,8 +49,8 @@ export type FinanceTransaction = {
 };
 
 export type IncomeExpense = {
-  income: number;
-  expense: number;
+  income: string;
+  expense: string;
 };
 
 export type MonthlyTotal = IncomeExpense & {
@@ -56,30 +59,30 @@ export type MonthlyTotal = IncomeExpense & {
 };
 
 export type BudgetSummary = {
-  amount: number | null;
+  amount: string | null;
   month: number;
   year: number;
-  spent: number;
-  progress: number;
+  spent: string;
+  progress: string;
   status: 'safe' | 'warning' | 'exceeded' | 'not_set';
 };
 
 export type CategoryTotal = {
   category: string;
-  amount: number;
+  amount: string;
   count: number;
 };
 
 export type FinanceAnalytics = {
   byCategory: CategoryTotal[];
   monthlyTotals: MonthlyTotal[];
-  totals: IncomeExpense & { net: number };
+  totals: IncomeExpense & { net: string };
   today: IncomeExpense;
   thisWeek: IncomeExpense;
   thisMonth: MonthlyTotal;
   budgetStatus: BudgetSummary['status'];
   budget: BudgetSummary;
-  trackedBalance: number;
+  trackedBalance: string;
   accounts: Pick<FinanceAccount, 'id' | 'name' | 'institution' | 'type' | 'accountSuffix' | 'currency' | 'balance' | 'color'>[];
   period: { from: string; to: string };
 };
@@ -87,17 +90,17 @@ export type FinanceAnalytics = {
 export type PersonSummary = {
   key: string;
   name: string;
-  sent: number;
-  received: number;
-  net: number;
+  sent: string;
+  received: string;
+  net: string;
   transactionCount: number;
   lastDate: string | null;
 };
 
 export type MerchantSummary = {
   name: string;
-  spent: number;
-  received: number;
+  spent: string;
+  received: string;
   transactionCount: number;
   lastDate: string | null;
   categories: string[];
@@ -110,7 +113,7 @@ export type PersonDetails = {
 
 export type BalanceHistoryPoint = {
   date: string;
-  balance: number;
+  balance: string;
 };
 
 export type StatementPreview = {
@@ -126,14 +129,14 @@ export type StatementPreview = {
   period: { from: string | null; to: string | null };
   sample: {
     date: string;
-    amount: number;
+    amount: string;
     type: TransactionType;
     merchant: string;
     counterparty: string | null;
     category: string;
     paymentMethod: string | null;
-    balanceBefore: number | null;
-    balanceAfter: number | null;
+    balanceBefore: string | null;
+    balanceAfter: string | null;
     referenceNumber: string | null;
   }[];
   issues: { row: number; message: string }[];
@@ -171,7 +174,7 @@ export type CreateAccountInput = {
   type: AccountType;
   accountSuffix?: string;
   currency?: string;
-  openingBalance: number;
+  openingBalance: string;
   openingBalanceDate: string;
   color?: string;
 };
@@ -179,15 +182,15 @@ export type CreateAccountInput = {
 export type CreateTransactionInput = {
   accountId?: string;
   merchant: string;
-  amount: number;
+  amount: string;
   type: TransactionType;
   category: string;
   counterparty?: string;
   counterpartyType?: 'person' | 'merchant' | 'other';
   paymentMethod?: string;
   date?: string;
-  balanceBefore?: number;
-  balanceAfter?: number;
+  balanceBefore?: string;
+  balanceAfter?: string;
   referenceNumber?: string;
   note?: string;
   description?: string;

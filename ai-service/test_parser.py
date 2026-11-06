@@ -11,8 +11,8 @@ def test_debit_amount_is_not_confused_with_available_balance():
         "Avl Bal: INR 12,450.50."
     )
 
-    assert result["amount"] == 450.0
-    assert result["balanceAfter"] == 12450.5
+    assert result["amount"] == "450"
+    assert result["balanceAfter"] == "12450.5"
     assert result["type"] == "debit"
     assert result["merchant"].lower().startswith("swiggy")
     assert result["category"] == "Food"
@@ -23,7 +23,7 @@ def test_salary_credit_extracts_sender():
         "Rs. 75000.00 credited to your SBI A/c XXXX8832 from TCS LTD on 25-10-26. Ref: SALARY OCT."
     )
 
-    assert result["amount"] == 75000.0
+    assert result["amount"] == "75000"
     assert result["type"] == "credit"
     assert result["merchant"].lower() == "tcs ltd"
     assert result["category"] == "Income"
@@ -35,11 +35,11 @@ def test_upi_person_transfer_and_balance():
         "Debited from HDFC Bank A/c XXXX1234. Bal: INR 5400."
     )
 
-    assert result["amount"] == 2000.0
+    assert result["amount"] == "2000"
     assert result["type"] == "debit"
     assert result["merchant"].lower() == "rahul sharma"
     assert result["category"] == "Transfer"
-    assert result["balanceAfter"] == 5400.0
+    assert result["balanceAfter"] == "5400"
 
 
 def test_non_transaction_message_is_rejected_without_echoing_sms():

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Decimal from 'decimal.js';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useAuth } from '@/auth/auth-context';
 import { FinanceScreen } from '@/components/finance-screen';
@@ -11,16 +12,16 @@ import { LineChart } from 'react-native-chart-kit';
 import { BalanceTrendFallback } from '@/components/web-chart-fallbacks';
 
 const GUEST_HISTORY: BalanceHistoryPoint[] = [
-  { date: '2026-01-31T23:59:59.999Z', balance: 245000 },
-  { date: '2026-02-28T23:59:59.999Z', balance: 260000 },
-  { date: '2026-03-31T23:59:59.999Z', balance: 290000 },
-  { date: '2026-04-30T23:59:59.999Z', balance: 310000 },
-  { date: '2026-05-31T23:59:59.999Z', balance: 335000 },
-  { date: '2026-06-30T23:59:59.999Z', balance: 350000 },
-  { date: '2026-07-31T23:59:59.999Z', balance: 375000 },
-  { date: '2026-08-31T23:59:59.999Z', balance: 395000 },
-  { date: '2026-09-30T23:59:59.999Z', balance: 420000 },
-  { date: '2026-10-31T23:59:59.999Z', balance: 452380 },
+  { date: '2026-01-31T23:59:59.999Z', balance: '245000' },
+  { date: '2026-02-28T23:59:59.999Z', balance: '260000' },
+  { date: '2026-03-31T23:59:59.999Z', balance: '290000' },
+  { date: '2026-04-30T23:59:59.999Z', balance: '310000' },
+  { date: '2026-05-31T23:59:59.999Z', balance: '335000' },
+  { date: '2026-06-30T23:59:59.999Z', balance: '350000' },
+  { date: '2026-07-31T23:59:59.999Z', balance: '375000' },
+  { date: '2026-08-31T23:59:59.999Z', balance: '395000' },
+  { date: '2026-09-30T23:59:59.999Z', balance: '420000' },
+  { date: '2026-10-31T23:59:59.999Z', balance: '452380' },
 ];
 
 export default function HistoryScreen(): React.JSX.Element {
@@ -39,7 +40,7 @@ export default function HistoryScreen(): React.JSX.Element {
   const [activitySnapshot, setActivitySnapshot] = useState<{
     key: string;
     transactions: FinanceTransaction[];
-    balances: { id: string; name: string; institution: string; balance: number; currency: string }[];
+    balances: { id: string; name: string; institution: string; balance: string; currency: string }[];
   }>({ key: '', transactions: [], balances: [] });
   const [historyError, setHistoryError] = useState<{ key: string; message: string } | null>(null);
   const [activityError, setActivityError] = useState<{ key: string; message: string } | null>(null);
@@ -158,17 +159,17 @@ export default function HistoryScreen(): React.JSX.Element {
       {visibleHistory.length > 0 ? (
         <SurfaceCard style={styles.historyCard}>
           <Text style={styles.historyDate}>{selectedMonthLabel}</Text>
-          <Text style={styles.historyBalance}>{formatINR(selectedPoint?.balance ?? 0)}</Text>
+          <Text style={styles.historyBalance}>{formatINR(selectedPoint?.balance ?? '0')}</Text>
           <Text style={styles.historyCaption}>{isGuest ? 'Sample net worth' : 'Tracked closing balance'}</Text>
           {visibleHistory.length > 1 ? (
             Platform.OS === 'web' ? (
               <BalanceTrendFallback data={visibleHistory.map((point) => ({
                 label: new Date(point.date).toLocaleDateString('en-IN', { month: 'short' }),
-                value: point.balance,
+                value: new Decimal(point.balance).toNumber(),
               }))} />
             ) : (
               <LineChart
-                data={{ labels: chartLabels, datasets: [{ data: visibleHistory.map((point) => point.balance) }] }}
+                data={{ labels: chartLabels, datasets: [{ data: visibleHistory.map((point) => new Decimal(point.balance).toNumber()) }] }}
                 width={chartWidth}
                 height={190}
                 chartConfig={{

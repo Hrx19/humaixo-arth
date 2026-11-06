@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import Decimal from 'decimal.js';
 import { Router, type RequestHandler } from 'express';
 import multer from 'multer';
 import { PDFParse } from 'pdf-parse';
@@ -62,11 +63,11 @@ const monthNumbers: Record<string, number> = {
 
 type ParsedPdfTransaction = {
   date: Date;
-  amount: number;
+  amount: string;
   type: 'credit' | 'debit';
   merchant: string;
   category: string;
-  balanceAfter?: number;
+  balanceAfter?: string;
 };
 
 function parseDate(value: string): Date | null {
@@ -115,14 +116,13 @@ function parseStatementLines(text: string): ParsedPdfTransaction[] {
 
     const withoutDate = line.replace(dateMatch[0], ' ');
     const values = [...withoutDate.matchAll(amountPattern)]
-      .map((match) => Number(match[0].replace(/,/g, '')))
-      .filter(Number.isFinite);
+      .map((match) => new Decimal(match[0].replace(/,/g, '')));
     if (values.length === 0) continue;
 
-    const balanceAfter = values.length > 1 ? Math.abs(values[values.length - 1]) : undefined;
+    const balanceAfter = values.length > 1 ? values[values.length - 1].abs().toString() : undefined;
     const amountValues = values.length > 1 ? values.slice(0, -1) : values;
-    const amount = Math.abs([...amountValues].reverse().find((value) => value !== 0) ?? 0);
-    if (amount <= 0) continue;
+    const amount = [...amountValues].reverse().find((value) => !value.isZero())?.abs().toString() ?? '0';
+    if (!new Decimal(amount).isPositive()) continue;
 
     const description = withoutDate
       .replace(amountPattern, ' ')
@@ -152,7 +152,7 @@ function getDedupeKey(accountId: Types.ObjectId, transaction: ParsedPdfTransacti
     .update([
       accountId.toString(),
       transaction.date.toISOString(),
-      transaction.amount.toFixed(2),
+      new Decimal(transaction.amount).toFixed(2),
       transaction.type,
       transaction.merchant.toLocaleLowerCase('en-IN'),
     ].join('|'))
@@ -244,13 +244,13 @@ pdfParserRouter.post('/', parseUpload, async (request, response) => {
             $setOnInsert: {
               userId: userObjectId,
               accountId,
-              amount: transaction.amount,
+              amount: Types.Decimal128.fromString(transaction.amount),
               type: transaction.type,
               category: transaction.category,
               merchant: transaction.merchant,
               date: transaction.date,
               ...(transaction.balanceAfter !== undefined
-                ? { balanceAfter: transaction.balanceAfter }
+                ? { balanceAfter: Types.Decimal128.fromString(transaction.balanceAfter) }
                 : {}),
               source: 'statement',
               confidence: 0.65,
