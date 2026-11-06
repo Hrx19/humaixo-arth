@@ -20,6 +20,14 @@ function normalizeOrigin(value: string): string {
   }
 }
 
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function buildOAuthClientMap(
   configuredMap: string | undefined,
   legacyClientId: string | undefined,
@@ -74,11 +82,10 @@ function getOAuthRedirectUrisFromProcess(corsOrigins: string[]): string[] {
     `${origin}/oauth/github`,
   ]);
 
-  // This is the default deep link shipped in app.json for GitHub sign-in.
-  // A custom production scheme must be explicitly allowlisted in the backend.
-  const nativeRedirects = process.env.NODE_ENV === 'production'
-    ? []
-    : ['humaixoarth://oauth/github'];
+  // GitHub receives this HTTPS relay URL, never the app's custom scheme.
+  // The relay route redirects to the fixed mobile URI after GitHub returns.
+  const githubCallback = process.env.GITHUB_OAUTH_CALLBACK_URL?.trim();
+  const nativeRedirects = githubCallback ? [githubCallback] : [];
 
   return [...new Set([...webRedirects, ...nativeRedirects])];
 }
@@ -154,6 +161,12 @@ const environmentSchema = z.object({
   MONGO_MAX_RETRIES: z.coerce.number().int().min(0).max(100).default(10),
   AI_SERVICE_URL: z.string().url().default('http://localhost:5001/parse-sms'),
   AI_SERVICE_API_KEY: z.string().default(''),
+  GITHUB_OAUTH_CALLBACK_URL: z.string().trim().default('').refine(
+    (value) => !value || isHttpsUrl(value),
+    'GITHUB_OAUTH_CALLBACK_URL must be an HTTPS URL when set.',
+  ),
+  GITHUB_MOBILE_REDIRECT_URI: z.literal('humaixoarth://oauth/github')
+    .default('humaixoarth://oauth/github'),
   GOOGLE_OAUTH_CLIENTS_JSON: oauthClientMapSchema('GOOGLE_OAUTH_CLIENTS_JSON'),
   GITHUB_OAUTH_CLIENTS_JSON: oauthClientMapSchema('GITHUB_OAUTH_CLIENTS_JSON'),
   OAUTH_ALLOWED_REDIRECT_URIS: z

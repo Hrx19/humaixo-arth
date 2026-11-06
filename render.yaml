@@ -40,6 +40,12 @@ services:
         value: "10"
       - key: CORS_ORIGINS
         value: https://humaixo-arth-web-hrx19.onrender.com
+      - key: GITHUB_OAUTH_CALLBACK_URL
+        value: https://humaixo-arth-api-hrx19.onrender.com/api/auth/callback/github
+      - key: GITHUB_MOBILE_REDIRECT_URI
+        value: humaixoarth://oauth/github
+      - key: OAUTH_ALLOWED_REDIRECT_URIS
+        value: https://humaixo-arth-api-hrx19.onrender.com/api/auth/callback/github,https://humaixo-arth-web-hrx19.onrender.com/oauth/google,https://humaixo-arth-web-hrx19.onrender.com/oauth/github
       - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
@@ -66,3 +72,5 @@ services:
     envVars:
       - key: EXPO_PUBLIC_API_URL
         value: https://humaixo-arth-api-hrx19.onrender.com
+      - key: EXPO_PUBLIC_GITHUB_NATIVE_REDIRECT_URI
+        value: https://humaixo-arth-api-hrx19.onrender.com/api/auth/callback/github

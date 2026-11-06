@@ -116,6 +116,48 @@ function sendOAuthFailure(response: Response, error: unknown) {
   });
 }
 
+function getCallbackQueryValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/**
+ * GitHub OAuth Apps require their registered callback to be HTTPS. The mobile
+ * client therefore sends GitHub here, and this endpoint relays only the OAuth
+ * code/state or OAuth error to the fixed app-owned deep link. The redirect
+ * target is never supplied by the browser, preventing open-redirect abuse.
+ */
+authRouter.get('/callback/github', (request, response) => {
+  const state = getCallbackQueryValue(request.query.state);
+  const code = getCallbackQueryValue(request.query.code);
+  const error = getCallbackQueryValue(request.query.error);
+  const errorDescription = getCallbackQueryValue(request.query.error_description);
+
+  if (!state) {
+    return response.status(400).json({
+      success: false,
+      error: 'GitHub returned an invalid callback without a state value.',
+      code: 'GITHUB_CALLBACK_STATE_MISSING',
+    });
+  }
+
+  if (!code && !error) {
+    return response.status(400).json({
+      success: false,
+      error: 'GitHub returned an incomplete callback.',
+      code: 'GITHUB_CALLBACK_CODE_MISSING',
+    });
+  }
+
+  const appRedirect = new URL(env.GITHUB_MOBILE_REDIRECT_URI);
+  appRedirect.searchParams.set('state', state);
+  if (code) appRedirect.searchParams.set('code', code);
+  if (error) appRedirect.searchParams.set('error', error);
+  if (errorDescription) appRedirect.searchParams.set('error_description', errorDescription);
+
+  response.set('Cache-Control', 'no-store');
+  return response.redirect(302, appRedirect.toString());
+});
+
 authRouter.post('/register', async (request, response) => {
   const parsed = registrationSchema.safeParse(request.body);
   if (!parsed.success) {
