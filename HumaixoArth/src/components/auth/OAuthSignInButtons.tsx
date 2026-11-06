@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -17,6 +18,10 @@ import {
   type DiscoveryDocument,
 } from 'expo-auth-session';
 import type { OAuthCodeExchange, OAuthProvider } from '@/services/auth-service';
+import {
+  clearPendingGitHubOAuth,
+  savePendingGitHubOAuth,
+} from '@/auth/github-oauth-handoff';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -29,10 +34,6 @@ const GITHUB_DISCOVERY: DiscoveryDocument = {
   authorizationEndpoint: 'https://github.com/login/oauth/authorize',
   tokenEndpoint: 'https://github.com/login/oauth/access_token',
 };
-
-// GitHub never receives this URI. It is only the fixed in-app return address
-// used after the HTTPS backend callback relays GitHub's code and state.
-const GITHUB_NATIVE_APP_RETURN_URI = 'humaixoarth://oauth/github';
 
 type WebProviderButtonProps = {
   provider: OAuthProvider;
@@ -60,7 +61,6 @@ type NativeGitHubButtonProps = {
   callbackUri: string;
   disabled: boolean;
   onBusyChange(value: boolean): void;
-  onAuthenticate(provider: OAuthProvider, exchange: OAuthCodeExchange): Promise<void>;
   onError(message: string): void;
 };
 
@@ -164,20 +164,6 @@ function getGitHubNativeErrorMessage(error: unknown): string {
     : 'GitHub sign-in could not be completed. Please try again.';
 }
 
-async function dismissOAuthBrowser(): Promise<void> {
-  try {
-    // iOS has dismissBrowser; dismissAuthSession is the Android-equivalent
-    // fallback and safely fails when no browser session remains.
-    if (Platform.OS === 'ios') {
-      await WebBrowser.dismissBrowser();
-      return;
-    }
-    WebBrowser.dismissAuthSession();
-  } catch {
-    // Android Custom Tabs returns to the app as it opens the deep link.
-  }
-}
-
 function NativeGoogleButton({
   webClientId,
   iosClientId,
@@ -266,7 +252,6 @@ function NativeGitHubButton({
   callbackUri,
   disabled,
   onBusyChange,
-  onAuthenticate,
   onError,
 }: NativeGitHubButtonProps): React.JSX.Element {
   const [isWorking, setIsWorking] = useState(false);
@@ -281,47 +266,27 @@ function NativeGitHubButton({
   }, GITHUB_DISCOVERY);
 
   const handlePress = async (): Promise<void> => {
-    if (disabled || isWorking || !request?.url || !request.codeVerifier) return;
+    if (disabled || isWorking || !request?.url || !request.codeVerifier || !request.state) return;
 
     setIsWorking(true);
     onBusyChange(true);
     try {
-      // useAuthRequest couples provider callback and app return URL. GitHub
-      // needs HTTPS while Android must listen for the relayed custom deep link,
-      // so build the request with the former and open the session with the latter.
-      const browserResult = await WebBrowser.openAuthSessionAsync(
-        request.url,
-        GITHUB_NATIVE_APP_RETURN_URI,
-      );
-
-      if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') return;
-      if (browserResult.type !== 'success') {
-        throw new Error('GitHub sign-in did not return to Humaixo Arth. Please try again.');
-      }
-
-      const response = request.parseReturnUrl(browserResult.url);
-      if (response.type === 'error') {
-        throw new Error(response.error?.message || 'GitHub sign-in was declined.');
-      }
-      if (response.type !== 'success') {
-        throw new Error('GitHub returned an incomplete sign-in response. Please try again.');
-      }
-
-      const code = response.params.code;
-      if (!code || !request.codeVerifier) {
-        throw new Error('GitHub returned an incomplete sign-in response. Please try again.');
-      }
-
-      await onAuthenticate('github', {
-        code,
+      await savePendingGitHubOAuth({
+        state: request.state,
         codeVerifier: request.codeVerifier,
         clientId,
         redirectUri: callbackUri,
       });
+
+      await Linking.openURL(request.url);
     } catch (error) {
+      if (request.state) {
+        await clearPendingGitHubOAuth(request.state).catch((storageError: unknown) => {
+          console.error('[GitHub Sign-In] Could not clear pending OAuth state.', storageError);
+        });
+      }
       onError(getGitHubNativeErrorMessage(error));
     } finally {
-      await dismissOAuthBrowser();
       setIsWorking(false);
       onBusyChange(false);
     }
@@ -473,7 +438,7 @@ export function OAuthSignInButtons({
         <WebProviderButton provider="google" clientId={googleWebClientId} redirectUri={googleWebRedirectUri} discovery={GOOGLE_DISCOVERY} scopes={['openid', 'email', 'profile']} disabled={disabled || !googleReady} onBusyChange={onBusyChange} onAuthenticate={onAuthenticate} onError={onError} />
       )}
       {isNative ? (
-        <NativeGitHubButton clientId={githubClientId} callbackUri={githubNativeCallbackUri} disabled={disabled || !githubReady} onBusyChange={onBusyChange} onAuthenticate={onAuthenticate} onError={onError} />
+        <NativeGitHubButton clientId={githubClientId} callbackUri={githubNativeCallbackUri} disabled={disabled || !githubReady} onBusyChange={onBusyChange} onError={onError} />
       ) : (
         <WebProviderButton provider="github" clientId={githubClientId} redirectUri={githubWebRedirectUri} discovery={GITHUB_DISCOVERY} scopes={['read:user', 'user:email']} disabled={disabled || !githubReady} onBusyChange={onBusyChange} onAuthenticate={onAuthenticate} onError={onError} />
       )}
