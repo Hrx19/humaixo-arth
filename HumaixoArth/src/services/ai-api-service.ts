@@ -29,6 +29,16 @@ export type MutationStatus = {
   createdAt: string;
 };
 
+export type FinancialAnomaly = {
+  id: string;
+  type: 'large_transaction' | 'spending_spike' | 'possible_duplicate';
+  message: string;
+  transaction_ids: string[];
+  amount: string | null;
+  detected_at: string;
+  reviewed: boolean;
+};
+
 type RequestOptions = {
   token: string;
   method?: 'GET' | 'POST';
@@ -127,6 +137,14 @@ export const AiApiService = {
 
   submitChatQuery(token: string, question: string): Promise<GroundedAiAnswer> {
     return request('/api/v1/ai/query', { token, method: 'POST', body: { question } });
+  },
+
+  async listAnomalies(token: string): Promise<FinancialAnomaly[]> {
+    const result = await request<{ success: true; data: FinancialAnomaly[] }>(
+      '/api/v1/anomalies',
+      { token },
+    );
+    return result.data;
   },
 
   async createProposal(

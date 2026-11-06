@@ -4,7 +4,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   useWindowDimensions,
   type StyleProp,
@@ -16,8 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FinanceTheme, useFinanceColors } from '@/constants/finance-theme';
 import { Typography } from '@/theme/typography';
 import { useThemeStore } from '@/store/themeStore';
+import { ScalePressable } from '@/components/scale-pressable';
+import { triggerLightImpact } from '@/utils/haptics';
 
-export type FinanceTab = 'home' | 'transactions' | 'people' | 'history' | 'insights' | 'tools';
+export type FinanceTab = 'home' | 'transactions' | 'people' | 'history' | 'insights' | 'tools' | 'ai' | 'accounts';
 
 type FinanceScreenProps = {
   title: string;
@@ -38,6 +39,13 @@ const NAV_ITEMS: { key: FinanceTab; label: string; icon: string; route: Href }[]
   { key: 'tools', label: 'Tools', icon: '\u2699', route: '/money-tools' },
 ];
 
+const MOBILE_NAV_ITEMS: { key: FinanceTab; label: string; icon: string; route: Href }[] = [
+  { key: 'home', label: 'Dashboard', icon: '\u2302', route: '/' },
+  { key: 'transactions', label: 'Transactions', icon: '\u25a4', route: '/transactions' },
+  { key: 'ai', label: 'Humaixo AI', icon: '\u2726', route: '/ai-assistant' },
+  { key: 'accounts', label: 'Accounts', icon: '\u25a3', route: '/accounts' },
+];
+
 export function FinanceScreen({
   title,
   subtitle,
@@ -56,18 +64,17 @@ export function FinanceScreen({
   const isDesktop = Platform.OS === 'web' && width >= 1024;
   const horizontalPadding = width < 360 ? 14 : width < 768 ? 18 : isDesktop ? 30 : 24;
 
-  const renderNavigation = (desktop: boolean): React.JSX.Element => (
-    <View style={[
-      desktop ? styles.sidebarNavigation : styles.bottomNav,
-      !desktop && { backgroundColor: colors.surface, borderTopColor: colors.border },
-    ]}>
-      {desktop ? <Text style={[styles.sidebarSectionLabel, { color: colors.subtle }]}>WORKSPACE</Text> : null}
-      {NAV_ITEMS.map((item) => {
+  const renderNavigation = (desktop: boolean): React.JSX.Element => {
+    const items = desktop ? NAV_ITEMS : MOBILE_NAV_ITEMS;
+    const renderItem = (item: (typeof items)[number]): React.JSX.Element => {
         const active = item.key === activeTab;
         return (
-          <TouchableOpacity
+          <ScalePressable
             key={item.key}
-            onPress={() => router.push(item.route)}
+            onPress={() => {
+              triggerLightImpact();
+              router.push(item.route);
+            }}
             style={[
               desktop ? styles.sidebarNavItem : styles.navItem,
               active && (desktop ? styles.sidebarNavItemActive : styles.navItemActive),
@@ -90,11 +97,34 @@ export function FinanceScreen({
             ]}>{item.label}</Text>
             {desktop && active ? <View style={styles.sidebarIndicator} /> : null}
             {!desktop && active ? <View style={styles.navIndicator} /> : null}
-          </TouchableOpacity>
+          </ScalePressable>
         );
-      })}
-    </View>
-  );
+    };
+
+    return (
+      <View style={[
+        desktop ? styles.sidebarNavigation : styles.bottomNav,
+        !desktop && { backgroundColor: colors.surface, borderTopColor: colors.border },
+      ]}>
+        {desktop ? <Text style={[styles.sidebarSectionLabel, { color: colors.subtle }]}>WORKSPACE</Text> : null}
+        {(desktop ? items : items.slice(0, 2)).map(renderItem)}
+        {!desktop ? (
+          <ScalePressable
+            onPress={() => {
+              triggerLightImpact();
+              router.push('/add-transaction');
+            }}
+            style={[styles.mobileAddButton, { backgroundColor: colors.primary, borderColor: colors.surface }]}
+            accessibilityRole="button"
+            accessibilityLabel="Add transaction"
+          >
+            <Text style={styles.mobileAddLabel}>+</Text>
+          </ScalePressable>
+        ) : null}
+        {!desktop ? items.slice(2).map(renderItem) : null}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'right', 'bottom', 'left']}>
@@ -103,11 +133,11 @@ export function FinanceScreen({
         {isDesktop ? (
           <View style={[styles.sidebar, { backgroundColor: colors.surface, borderRightColor: colors.border }]}>
             <View style={styles.brand}>
-              <View style={styles.logoMark}><Text style={styles.logoText}>H</Text></View>
+              <View style={[styles.logoMark, { backgroundColor: colors.primary }]}><Text style={styles.logoText}>H</Text></View>
               <Text style={[styles.brandName, { color: colors.text }]}>Humaixo <Text style={[styles.brandAccent, { color: colors.primarySoft }]}>Arth</Text></Text>
             </View>
             {!isInMainTabs ? renderNavigation(true) : null}
-            <View style={styles.sidebarFooter}>
+            <View style={[styles.sidebarFooter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.sidebarFooterTitle, { color: colors.text }]}>Your money, clearly understood.</Text>
               <Text style={[styles.sidebarFooterText, { color: colors.subtle }]}>Private finance tools for everyday decisions.</Text>
             </View>
@@ -118,20 +148,23 @@ export function FinanceScreen({
           <View style={[styles.topBar, { paddingHorizontal: horizontalPadding }]}>
             {!isDesktop ? (
               <View style={styles.brand}>
-                <View style={styles.logoMark}><Text style={styles.logoText}>H</Text></View>
+                <View style={[styles.logoMark, { backgroundColor: colors.primary }]}><Text style={styles.logoText}>H</Text></View>
                 <Text style={[styles.brandName, { color: colors.text }]}>Humaixo <Text style={[styles.brandAccent, { color: colors.primarySoft }]}>Arth</Text></Text>
               </View>
             ) : <View style={styles.desktopTopSpacer} />}
             <View style={styles.topAction}>
               {rightAction ?? (
-                <TouchableOpacity
-                  onPress={() => router.push('/profile')}
-                  style={styles.profileButton}
+                <ScalePressable
+                  onPress={() => {
+                    triggerLightImpact();
+                    router.push('/profile');
+                  }}
+                  style={[styles.profileButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
                   accessibilityRole="button"
                   accessibilityLabel="Open profile and settings"
                 >
                   <Text style={[styles.profileButtonText, { color: colors.primarySoft }]}>H</Text>
-                </TouchableOpacity>
+                </ScalePressable>
               )}
             </View>
           </View>
@@ -208,7 +241,7 @@ const styles = StyleSheet.create({
   sidebarNavigation: { gap: 7, marginTop: 42 },
   sidebarSectionLabel: { color: FinanceTheme.colors.subtle, fontSize: 9, fontWeight: '800', letterSpacing: 1.2, marginBottom: 6, paddingHorizontal: 11 },
   sidebarNavItem: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, borderRadius: 13, position: 'relative' },
-  sidebarNavItemActive: { backgroundColor: 'rgba(128,92,255,0.15)' },
+  sidebarNavItemActive: { backgroundColor: 'rgba(11,130,126,0.15)' },
   sidebarNavIcon: { width: 22, textAlign: 'center', color: FinanceTheme.colors.subtle, fontSize: 19, fontWeight: '700' },
   sidebarNavLabel: { color: FinanceTheme.colors.muted, fontSize: 12, fontWeight: '600' },
   sidebarIndicator: { position: 'absolute', left: 0, top: 10, bottom: 10, width: 3, borderRadius: 3, backgroundColor: FinanceTheme.colors.primary },
@@ -259,10 +292,26 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   navItem: { flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 1, position: 'relative', borderRadius: 10 },
-  navItemActive: { backgroundColor: 'rgba(128,92,255,0.07)' },
+  navItemActive: { backgroundColor: 'rgba(11,130,126,0.07)' },
   navIcon: { color: FinanceTheme.colors.subtle, fontSize: 20, lineHeight: 24, fontWeight: '700' },
   navIconActive: { color: FinanceTheme.colors.primarySoft },
   navLabel: { color: FinanceTheme.colors.subtle, fontSize: Typography.size.caption, fontWeight: '600' },
   navLabelActive: { color: FinanceTheme.colors.primarySoft },
   navIndicator: { position: 'absolute', top: 0, width: 24, height: 2, borderRadius: 2, backgroundColor: FinanceTheme.colors.primary },
+  mobileAddButton: {
+    width: 46,
+    height: 46,
+    marginHorizontal: 7,
+    marginTop: -16,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    elevation: 5,
+    shadowColor: '#000000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  mobileAddLabel: { color: '#ffffff', fontSize: 28, lineHeight: 32, fontWeight: '400' },
 });

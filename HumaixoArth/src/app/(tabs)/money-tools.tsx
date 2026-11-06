@@ -17,7 +17,7 @@ export default function MoneyToolsScreen(): React.JSX.Element {
   const router = useRouter();
   const colors = useFinanceColors();
   return (
-    <FinanceScreen title="Money tools" subtitle="Thoughtful tools for the decisions behind your everyday finances." activeTab="tools">
+    <FinanceScreen title="More" subtitle="Useful tools for planning, preferences, and the details behind your finances.">
       <ToolSectionTitle>Plan & organise</ToolSectionTitle>
       {FEATURES.map((feature) => (
         <TouchableOpacity key={feature.route} onPress={() => router.push(feature.route)} accessibilityRole="link">
@@ -33,12 +33,13 @@ export default function MoneyToolsScreen(): React.JSX.Element {
           </ToolCard>
         </TouchableOpacity>
       ))}
-      <ToolSectionTitle>More to explore</ToolSectionTitle>
+      <ToolSectionTitle>Activity & preferences</ToolSectionTitle>
       {([
         { route: '/people', title: 'People', description: 'Review activity connected to people.' },
         { route: '/insights', title: 'Insights', description: 'Explore spending patterns and trends.' },
         { route: '/history', title: 'Balance history', description: 'See account balances over time.' },
         { route: '/notifications', title: 'Notifications', description: 'Review budget, anomaly, and import alerts.' },
+        { route: '/settings', title: 'Settings', description: 'Manage privacy and regional preferences.' },
       ] as const).map((item) => (
         <TouchableOpacity key={item.route} onPress={() => router.push(item.route)} accessibilityRole="link">
           <ToolCard style={styles.secondaryCard}>

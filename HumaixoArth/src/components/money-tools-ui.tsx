@@ -4,12 +4,13 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
 import { useFinanceColors } from '@/constants/finance-theme';
+import { ScalePressable } from '@/components/scale-pressable';
+import { SkeletonBlock } from '@/components/finance-ui';
 
 export function ToolCard({
   children,
@@ -45,7 +46,7 @@ export function ToolButton({
       : colors.primary;
   const foregroundColor = destructive ? colors.red : secondary ? colors.text : '#ffffff';
   return (
-    <TouchableOpacity
+    <ScalePressable
       onPress={onPress}
       disabled={disabled || loading}
       accessibilityRole="button"
@@ -53,7 +54,7 @@ export function ToolButton({
       style={[styles.button, { backgroundColor, borderColor: secondary ? colors.border : backgroundColor }, (disabled || loading) && styles.buttonDisabled]}
     >
       {loading ? <ActivityIndicator size="small" color={foregroundColor} /> : <Text style={[styles.buttonText, { color: foregroundColor }]}>{label}</Text>}
-    </TouchableOpacity>
+    </ScalePressable>
   );
 }
 
@@ -126,15 +127,14 @@ export function ToolEmptyState({
 }
 
 export function ToolLoading(): React.JSX.Element {
-  const colors = useFinanceColors();
   return (
     <View style={styles.loadingList} accessibilityLabel="Loading">
       {[0, 1, 2].map((item) => (
-        <View key={item} style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.skeletonLine, styles.skeletonWide, { backgroundColor: colors.surfaceRaised }]} />
-          <View style={[styles.skeletonLine, { backgroundColor: colors.surfaceRaised }]} />
-          <View style={[styles.skeletonLine, styles.skeletonShort, { backgroundColor: colors.surfaceRaised }]} />
-        </View>
+        <ToolCard key={item} style={styles.skeletonCard}>
+          <SkeletonBlock style={[styles.skeletonLine, styles.skeletonWide]} />
+          <SkeletonBlock style={styles.skeletonLine} />
+          <SkeletonBlock style={[styles.skeletonLine, styles.skeletonShort]} />
+        </ToolCard>
       ))}
     </View>
   );
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   body: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
   emptyAction: { width: '100%', marginTop: 2 },
   loadingList: { gap: 12 },
-  skeletonCard: { minHeight: 130, borderWidth: 1, borderRadius: 18, padding: 16, gap: 15 },
+  skeletonCard: { minHeight: 130 },
   skeletonLine: { height: 12, width: '65%', borderRadius: 6 },
   skeletonWide: { width: '86%', height: 15 },
   skeletonShort: { width: '42%' },

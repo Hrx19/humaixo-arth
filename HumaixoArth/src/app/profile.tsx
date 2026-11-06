@@ -100,6 +100,7 @@ export default function ProfileScreen(): React.JSX.Element {
             <MenuItem icon="▤" title="Transaction ledger" description="Search payments, balances and references" onPress={() => router.push('/transactions')} />
             <MenuItem icon="✦" title="Insights and trends" description="Monthly cash flow and category analysis" onPress={() => router.push('/insights')} />
             <MenuItem icon="◷" title="Balance history" description="Look back at tracked monthly balances" onPress={() => router.push('/history')} />
+            <MenuItem icon="⋯" title="More tools" description="Budgets, loans, transfers, recurring activity and alerts" onPress={() => router.push('/money-tools')} />
           </Section>
 
           <Section title="Preferences and support">
@@ -216,7 +217,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: FinanceTheme.colors.muted, fontSize: 14, fontWeight: '800', paddingHorizontal: 2, letterSpacing: 0.3 },
   sectionCard: { paddingHorizontal: 12, paddingVertical: 2 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderBottomColor: FinanceTheme.colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
-  menuIcon: { width: 33, height: 33, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(128,92,255,0.15)' },
+  menuIcon: { width: 33, height: 33, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(11,130,126,0.15)' },
   menuIconText: { color: FinanceTheme.colors.primarySoft, fontSize: 15, fontWeight: '800' },
   menuText: { flex: 1 },
   menuTitle: { color: FinanceTheme.colors.text, fontSize: 14, fontWeight: '700' },

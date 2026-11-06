@@ -1,10 +1,16 @@
-import React, { memo, type ReactNode } from 'react';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import React, { memo, useEffect, type ReactNode } from 'react';
+import Animated, {
+  cancelAnimation,
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import {
   ActivityIndicator,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   type StyleProp,
   type TextStyle,
@@ -14,6 +20,7 @@ import { FinanceTheme, formatDate, formatINR, formatShortDate, useFinanceColors 
 import type { FinanceTransaction } from '@/types/finance';
 import { Trash2 } from 'lucide-react-native';
 import { Typography } from '@/theme/typography';
+import { ScalePressable } from '@/components/scale-pressable';
 
 type SurfaceCardProps = {
   children: ReactNode;
@@ -29,6 +36,32 @@ export function SurfaceCard({ children, style }: SurfaceCardProps): React.JSX.El
   );
 }
 
+export function SkeletonBlock({
+  style,
+  label = 'Loading',
+}: {
+  style?: StyleProp<ViewStyle>;
+  label?: string;
+}): React.JSX.Element {
+  const colors = useFinanceColors();
+  const shimmer = useSharedValue(0);
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: 0.48 + shimmer.value * 0.3,
+  }));
+
+  useEffect(() => {
+    shimmer.value = withRepeat(withTiming(1, { duration: 900 }), -1, true);
+    return () => cancelAnimation(shimmer);
+  }, [shimmer]);
+
+  return (
+    <Animated.View
+      accessibilityLabel={label}
+      style={[{ backgroundColor: colors.surfaceRaised }, animatedStyle, style]}
+    />
+  );
+}
+
 type SectionHeaderProps = {
   title: string;
   actionLabel?: string;
@@ -41,9 +74,9 @@ export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderPro
     <View style={styles.sectionHeader}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
       {actionLabel && onAction ? (
-        <TouchableOpacity onPress={onAction} accessibilityRole="button">
+        <ScalePressable onPress={onAction} accessibilityRole="button">
           <Text style={[styles.sectionAction, { color: colors.primarySoft }]}>{actionLabel}</Text>
-        </TouchableOpacity>
+        </ScalePressable>
       ) : null}
     </View>
   );
@@ -64,27 +97,41 @@ export function PrimaryButton({
   disabled = false,
   secondary = false,
 }: PrimaryButtonProps): React.JSX.Element {
+  const colors = useFinanceColors();
   return (
-    <TouchableOpacity
+    <ScalePressable
       onPress={onPress}
       disabled={disabled || loading}
-      style={[styles.button, secondary && styles.secondaryButton, (disabled || loading) && styles.buttonDisabled]}
+      style={[
+        styles.button,
+        secondary && styles.secondaryButton,
+        {
+          backgroundColor: secondary ? colors.surfaceRaised : colors.primary,
+          borderColor: secondary ? colors.border : colors.primary,
+        },
+        (disabled || loading) && styles.buttonDisabled,
+      ]}
       accessibilityRole="button"
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
     >
-      {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.buttonText}>{label}</Text>}
-    </TouchableOpacity>
+      {loading ? (
+        <ActivityIndicator color={secondary ? colors.text : '#ffffff'} />
+      ) : (
+        <Text style={[styles.buttonText, { color: secondary ? colors.text : '#ffffff' }]}>{label}</Text>
+      )}
+    </ScalePressable>
   );
 }
 
 type InfoPillProps = { label: string; tone?: 'purple' | 'green' | 'red' | 'amber' };
 
 export function InfoPill({ label, tone = 'purple' }: InfoPillProps): React.JSX.Element {
+  const colors = useFinanceColors();
   const toneStyles: Record<NonNullable<InfoPillProps['tone']>, { container: ViewStyle; text: TextStyle }> = {
-    purple: { container: styles.pill_purple, text: styles.pillText_purple },
-    green: { container: styles.pill_green, text: styles.pillText_green },
-    red: { container: styles.pill_red, text: styles.pillText_red },
-    amber: { container: styles.pill_amber, text: styles.pillText_amber },
+    purple: { container: { backgroundColor: `${colors.primary}1b` }, text: { color: colors.primarySoft } },
+    green: { container: { backgroundColor: `${colors.green}1b` }, text: { color: colors.green } },
+    red: { container: { backgroundColor: `${colors.red}1b` }, text: { color: colors.red } },
+    amber: { container: { backgroundColor: `${colors.amber}1b` }, text: { color: colors.amber } },
   };
 
   return (
@@ -161,29 +208,28 @@ function TransactionRowComponent({
   );
 
   return (
-    <View style={styles.transactionRow}>
+    <View style={[styles.transactionRow, { borderBottomColor: colors.border }]}>
       {onPress ? (
-        <TouchableOpacity
+        <ScalePressable
           onPress={onPress}
-          activeOpacity={0.78}
           style={styles.transactionMain}
           accessibilityRole="button"
           accessibilityLabel={`${transaction.merchant}, ${isCredit ? 'received' : 'spent'} ${formatINR(transaction.amount)}`}
         >
           {transactionSummary}
-        </TouchableOpacity>
+        </ScalePressable>
       ) : (
         <View style={styles.transactionMain}>{transactionSummary}</View>
       )}
       {onDelete ? (
-        <TouchableOpacity
+        <ScalePressable
           onPress={onDelete}
           style={styles.deleteButton}
           accessibilityRole="button"
           accessibilityLabel={`Delete ${transaction.merchant}`}
         >
-          <Trash2 size={17} color={FinanceTheme.colors.red} />
-        </TouchableOpacity>
+          <Trash2 size={17} color={colors.red} />
+        </ScalePressable>
       ) : null}
     </View>
   );
@@ -196,7 +242,9 @@ export function EmptyState({ title, description, action }: EmptyStateProps): Rea
   const colors = useFinanceColors();
   return (
     <View style={[styles.emptyState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>{'\u2726'}</Text></View>
+      <View style={[styles.emptyIcon, { backgroundColor: `${colors.primary}1b` }]}>
+        <Text style={[styles.emptyIconText, { color: colors.primarySoft }]}>{'\u2726'}</Text>
+      </View>
       <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
       <Text style={[styles.emptyDescription, { color: colors.muted }]}>{description}</Text>
       {action ? <View style={styles.emptyAction}>{action}</View> : null}
@@ -227,15 +275,7 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.58 },
   buttonText: { color: '#ffffff', fontSize: Typography.size.body, fontWeight: '700' },
   pill: { alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
-  pill_purple: { backgroundColor: 'rgba(128,92,255,0.16)' },
-  pill_green: { backgroundColor: 'rgba(33,201,151,0.13)' },
-  pill_red: { backgroundColor: 'rgba(255,99,117,0.13)' },
-  pill_amber: { backgroundColor: 'rgba(245,184,75,0.13)' },
   pillText: { fontSize: Typography.size.caption, fontWeight: '700' },
-  pillText_purple: { color: FinanceTheme.colors.primarySoft },
-  pillText_green: { color: FinanceTheme.colors.green },
-  pillText_red: { color: FinanceTheme.colors.red },
-  pillText_amber: { color: FinanceTheme.colors.amber },
   transactionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -247,7 +287,7 @@ const styles = StyleSheet.create({
   transactionMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 11 },
   transactionIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   transactionIconCredit: { backgroundColor: 'rgba(33,201,151,0.12)' },
-  transactionIconDebit: { backgroundColor: 'rgba(128,92,255,0.14)' },
+  transactionIconDebit: { backgroundColor: 'rgba(11,130,126,0.14)' },
   transactionIconText: { color: FinanceTheme.colors.primarySoft, fontSize: 17, fontWeight: '800' },
   transactionIconTextCredit: { color: FinanceTheme.colors.green },
   transactionInfo: { flex: 1, minWidth: 0 },
@@ -260,7 +300,7 @@ const styles = StyleSheet.create({
   transactionDetails: { marginTop: 10, gap: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: FinanceTheme.colors.border },
   detailLine: { color: FinanceTheme.colors.muted, fontSize: 10, lineHeight: 15 },
   emptyState: { alignItems: 'center', padding: 24, borderWidth: 1, borderColor: FinanceTheme.colors.border, borderRadius: 18, backgroundColor: FinanceTheme.colors.surface },
-  emptyIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: 'rgba(128,92,255,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 11 },
+  emptyIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: 'rgba(11,130,126,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 11 },
   emptyIconText: { color: FinanceTheme.colors.primarySoft, fontSize: 20 },
   emptyTitle: { color: FinanceTheme.colors.text, fontSize: Typography.size.body, fontWeight: '700', textAlign: 'center' },
   emptyDescription: { color: FinanceTheme.colors.muted, fontSize: Typography.size.subtext, lineHeight: 21, textAlign: 'center', marginTop: 6 },

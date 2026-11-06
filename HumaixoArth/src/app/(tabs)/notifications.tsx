@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +8,9 @@ import { FinanceScreen } from '@/components/finance-screen';
 import { useAuth } from '@/auth/auth-context';
 import { useFinanceColors } from '@/constants/finance-theme';
 import { Phase6Service, type UserNotification } from '@/services/phase6-service';
+import { ScalePressable } from '@/components/scale-pressable';
+import { ToolLoading } from '@/components/money-tools-ui';
+import { triggerSuccessHaptic } from '@/utils/haptics';
 
 function notificationIcon(type: UserNotification['type']): keyof typeof Ionicons.glyphMap {
   if (type === 'anomaly') return 'warning-outline';
@@ -41,25 +37,27 @@ export default function NotificationsScreen(): React.JSX.Element {
   const markRead = useMutation({
     mutationFn: (id: string) => Phase6Service.markNotificationRead(token!, id),
     onSuccess: async () => {
+      triggerSuccessHaptic();
       await queryClient.invalidateQueries({ queryKey: ['phase6', 'notifications', token] });
     },
   });
   const markAllRead = useMutation({
     mutationFn: () => Phase6Service.markAllNotificationsRead(token!),
     onSuccess: async () => {
+      triggerSuccessHaptic();
       await queryClient.invalidateQueries({ queryKey: ['phase6', 'notifications', token] });
     },
   });
 
   if (status === 'loading') {
-    return <FinanceScreen title="Notifications"><ActivityIndicator color={colors.primarySoft} /></FinanceScreen>;
+    return <FinanceScreen title="Notifications"><ToolLoading /></FinanceScreen>;
   }
   if (!token) {
     return (
       <FinanceScreen title="Notifications" subtitle="Sign in to review alerts tied to your financial records.">
-        <TouchableOpacity onPress={() => router.push('/login')} style={[styles.emptyAction, { backgroundColor: colors.primary }]}>
+        <ScalePressable onPress={() => router.push('/login')} style={[styles.emptyAction, { backgroundColor: colors.primary }]}>
           <Text style={styles.emptyActionText}>Sign in</Text>
-        </TouchableOpacity>
+        </ScalePressable>
       </FinanceScreen>
     );
   }
@@ -96,12 +94,12 @@ export default function NotificationsScreen(): React.JSX.Element {
             {new Date(item.created_at).toLocaleString('en-IN')}
           </Text>
           {item.type === 'anomaly' && item.related_entity_id ? (
-            <TouchableOpacity
+            <ScalePressable
               onPress={() => router.push(`/(tabs)/transactions/${item.related_entity_id}`)}
               accessibilityRole="link"
             >
               <Text style={[styles.link, { color: colors.primarySoft }]}>Review transaction</Text>
-            </TouchableOpacity>
+            </ScalePressable>
           ) : null}
         </View>
       </View>
@@ -113,7 +111,7 @@ export default function NotificationsScreen(): React.JSX.Element {
       title="Notifications"
       subtitle={unreadCount ? `${unreadCount} unread alert(s). Swipe an alert to mark it as read.` : 'Your budget, anomaly, and import alerts.'}
       rightAction={unreadCount ? (
-        <TouchableOpacity
+        <ScalePressable
           onPress={() => markAllRead.mutate()}
           disabled={markAllRead.isPending}
           accessibilityRole="button"
@@ -123,16 +121,16 @@ export default function NotificationsScreen(): React.JSX.Element {
           <Text style={[styles.allReadText, { color: colors.primarySoft }]}>
             {markAllRead.isPending ? 'Saving…' : 'Read all'}
           </Text>
-        </TouchableOpacity>
+        </ScalePressable>
       ) : undefined}
     >
-      {notifications.isLoading ? <ActivityIndicator color={colors.primarySoft} /> : null}
+      {notifications.isLoading ? <ToolLoading /> : null}
       {notifications.isError ? (
         <View style={styles.errorBox}>
           <Text style={[styles.errorText, { color: colors.red }]}>{notifications.error.message}</Text>
-          <TouchableOpacity onPress={() => void notifications.refetch()}>
+          <ScalePressable onPress={() => void notifications.refetch()}>
             <Text style={[styles.link, { color: colors.primarySoft }]}>Try again</Text>
-          </TouchableOpacity>
+          </ScalePressable>
         </View>
       ) : null}
       {notifications.data?.length === 0 ? (

@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   noHistory: { color: FinanceTheme.colors.subtle, textAlign: 'center', fontSize: 10, padding: 18, lineHeight: 16 },
   timelineStrip: { flexDirection: 'row', paddingHorizontal: 6, paddingBottom: 4, gap: 2 },
   timelineItem: { minWidth: 38, alignItems: 'center', gap: 5, paddingVertical: 6, borderRadius: 9 },
-  timelineItemActive: { backgroundColor: 'rgba(128,92,255,0.15)' },
+  timelineItemActive: { backgroundColor: 'rgba(11,130,126,0.15)' },
   timelineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: FinanceTheme.colors.border },
   timelineDotActive: { width: 8, height: 8, borderRadius: 4, backgroundColor: FinanceTheme.colors.primarySoft },
   timelineMonth: { color: FinanceTheme.colors.subtle, fontSize: 8, fontWeight: '700' },

@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   errorText: { color: FinanceTheme.colors.red, fontSize: 11 },
   listGap: { gap: 9 },
   personCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
-  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(128,92,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(11,130,126,0.2)', alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: FinanceTheme.colors.primarySoft, fontSize: 13, fontWeight: '800' },
   personInfo: { flex: 1, minWidth: 0 },
   personName: { color: FinanceTheme.colors.text, fontSize: 12, fontWeight: '800' },

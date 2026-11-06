@@ -68,7 +68,7 @@ export default function RootLayout(): React.JSX.Element {
               {splashVisible ? (
                 <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, splashStyle]}>
                   <LinearGradient
-                    colors={['#241850', '#111329', '#090910']}
+                    colors={['#0b3538', '#0b1c28', '#05090f']}
                     locations={[0, 0.58, 1]}
                     style={styles.splash}
                   >
@@ -111,6 +111,6 @@ const styles = StyleSheet.create({
   },
   logoText: { color: '#ffffff', fontSize: 44, fontWeight: '900' },
   brandName: { color: '#ffffff', fontSize: 28, fontWeight: '800', letterSpacing: 0.2 },
-  tagline: { color: '#c4bbeb', fontSize: 14, marginTop: 1 },
-  footer: { position: 'absolute', bottom: 42, color: '#9990bd', fontSize: 11, letterSpacing: 2 },
+  tagline: { color: '#a6c8c5', fontSize: 14, marginTop: 1 },
+  footer: { position: 'absolute', bottom: 42, color: '#6e9a98', fontSize: 11, letterSpacing: 2 },
 });

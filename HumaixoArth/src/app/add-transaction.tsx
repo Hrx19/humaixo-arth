@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Decimal from 'decimal.js';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,8 @@ import { FinanceTheme, useFinanceColors } from '@/constants/finance-theme';
 import { FinanceService } from '@/services/finance-service';
 import { useFinanceStore } from '@/store/finance-store';
 import type { CreateTransactionInput, TransactionType } from '@/types/finance';
+import { ScalePressable } from '@/components/scale-pressable';
+import { triggerSuccessHaptic } from '@/utils/haptics';
 
 const CATEGORIES = ['Food', 'Shopping', 'Travel', 'Fuel', 'Bills', 'Transfer', 'Income', 'Healthcare', 'Rent', 'Other'];
 const CATEGORY_ICONS: Record<string, string> = {
@@ -99,6 +101,7 @@ export default function AddTransactionScreen(): React.JSX.Element {
     setError(null);
     try {
       await FinanceService.createTransaction(token, input);
+      triggerSuccessHaptic();
       await refreshDashboard(token);
       Alert.alert('Saved', 'Transaction has been added to your ledger.');
       router.replace('/transactions');
@@ -113,8 +116,8 @@ export default function AddTransactionScreen(): React.JSX.Element {
     <FinanceScreen title="Add transaction" subtitle="Record an entry with enough context to explain it later.">
       {isGuest ? (
         <SurfaceCard style={styles.guestCard}>
-          <Text style={styles.guestTitle}>Sign in to keep a private ledger</Text>
-          <Text style={styles.helpText}>Transactions are saved to your account and never added to the shared demo.</Text>
+          <Text style={[styles.guestTitle, { color: colors.text }]}>Sign in to keep a private ledger</Text>
+          <Text style={[styles.helpText, { color: colors.muted }]}>Transactions are saved to your account and never added to the shared demo.</Text>
           <PrimaryButton label="Login" onPress={() => router.push('/login')} />
         </SurfaceCard>
       ) : (
@@ -125,7 +128,7 @@ export default function AddTransactionScreen(): React.JSX.Element {
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Amount (₹)</Text>
+            <Text style={[styles.fieldLabel, { color: colors.muted }]}>Amount (₹)</Text>
             <TextInput
               value={amount}
               onChangeText={(value) => {
@@ -150,36 +153,39 @@ export default function AddTransactionScreen(): React.JSX.Element {
           <Text style={[styles.fieldLabel, { color: colors.muted }]}>Category</Text>
           <View style={[styles.categoryGrid, categoryError ? { borderWidth: 1, borderColor: colors.red, borderRadius: 14, padding: 5 } : null]}>
             {CATEGORIES.map((value) => (
-              <TouchableOpacity
+              <ScalePressable
                 key={value}
                 onPress={() => { setCategory(value); setCategoryError(null); }}
                 style={[
                   styles.categoryChoice,
-                  { borderColor: category === value ? colors.primary : colors.border, backgroundColor: colors.surfaceRaised },
                   category === value && styles.categoryChoiceActive,
+                  {
+                    borderColor: category === value ? colors.primary : colors.border,
+                    backgroundColor: category === value ? `${colors.primary}25` : colors.surfaceRaised,
+                  },
                 ]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: category === value }}
               >
                 <Text style={[styles.categoryIcon, { color: colors.primarySoft }]}>{CATEGORY_ICONS[value]}</Text>
-                <Text style={[styles.categoryLabel, category === value && styles.typeButtonTextActive]}>{value}</Text>
-              </TouchableOpacity>
+                <Text style={[styles.categoryLabel, { color: category === value ? colors.primarySoft : colors.muted }]}>{value}</Text>
+              </ScalePressable>
             ))}
           </View>
           {categoryError ? <Text accessibilityRole="alert" style={[styles.fieldError, { color: colors.red }]}>{categoryError}</Text> : null}
 
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Transaction date</Text>
-            <TouchableOpacity
+            <Text style={[styles.fieldLabel, { color: colors.muted }]}>Transaction date</Text>
+            <ScalePressable
               onPress={() => setShowDatePicker((visible) => !visible)}
-              style={styles.dateButton}
+              style={[styles.dateButton, { backgroundColor: colors.background, borderColor: colors.border }]}
               accessibilityRole="button"
             >
-              <Text style={styles.dateButtonText}>
+              <Text style={[styles.dateButtonText, { color: colors.text }]}>
                 {transactionDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
               </Text>
-              <Text style={styles.dateButtonIcon}>▦</Text>
-            </TouchableOpacity>
+              <Text style={[styles.dateButtonIcon, { color: colors.primarySoft }]}>▦</Text>
+            </ScalePressable>
             {showDatePicker ? (
               <DateTimePicker
                 value={transactionDate}
@@ -205,17 +211,17 @@ export default function AddTransactionScreen(): React.JSX.Element {
               </View>
             </>
           ) : (
-            <TouchableOpacity onPress={() => router.push('/accounts')} style={styles.addAccountLink}>
-              <Text style={styles.addAccountLinkText}>＋ Add an account for balance tracking</Text>
-            </TouchableOpacity>
+            <ScalePressable onPress={() => router.push('/accounts')} style={styles.addAccountLink}>
+              <Text style={[styles.addAccountLinkText, { color: colors.primarySoft }]}>＋ Add an account for balance tracking</Text>
+            </ScalePressable>
           )}
 
-          <View style={styles.optionalHeader}><Text style={styles.fieldLabel}>More detail (optional)</Text><Text style={styles.optionalTag}>You can add this later</Text></View>
+          <View style={styles.optionalHeader}><Text style={[styles.fieldLabel, { color: colors.muted }]}>More detail (optional)</Text><Text style={[styles.optionalTag, { color: colors.subtle }]}>You can add this later</Text></View>
           <Field label="Payment method" value={paymentMethod} onChangeText={setPaymentMethod} placeholder="UPI, NEFT, cash, card" />
           <Field label="Balance after (₹)" value={balanceAfter} onChangeText={setBalanceAfter} placeholder="Use if shown on your statement" keyboardType="decimal-pad" />
           <Field label="Note" value={note} onChangeText={setNote} placeholder="What was this for?" />
 
-          {error ? <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text> : null}
+          {error ? <Text accessibilityRole="alert" style={[styles.errorText, { color: colors.red }]}>{error}</Text> : null}
           <PrimaryButton label="Save transaction" onPress={() => void handleSave()} loading={saving} />
         </SurfaceCard>
       )}
@@ -224,19 +230,36 @@ export default function AddTransactionScreen(): React.JSX.Element {
 }
 
 function Field({ label, value, onChangeText, placeholder, keyboardType = 'default' }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; keyboardType?: 'default' | 'decimal-pad' }): React.JSX.Element {
+  const colors = useFinanceColors();
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={FinanceTheme.colors.subtle} keyboardType={keyboardType} style={styles.input} />
+      <Text style={[styles.fieldLabel, { color: colors.muted }]}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.subtle}
+        keyboardType={keyboardType}
+        style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+      />
     </View>
   );
 }
 
 function TypeButton({ label, active, onPress, compact = false }: { label: string; active: boolean; onPress: () => void; compact?: boolean }): React.JSX.Element {
+  const colors = useFinanceColors();
   return (
-    <TouchableOpacity onPress={onPress} style={[styles.typeButton, compact && styles.typeButtonCompact, active && styles.typeButtonActive]}>
-      <Text style={[styles.typeButtonText, active && styles.typeButtonTextActive]}>{label}</Text>
-    </TouchableOpacity>
+    <ScalePressable
+      onPress={onPress}
+      style={[
+        styles.typeButton,
+        compact && styles.typeButtonCompact,
+        active && styles.typeButtonActive,
+        { backgroundColor: active ? `${colors.primary}25` : colors.surfaceRaised, borderColor: active ? colors.primary : colors.border },
+      ]}
+    >
+      <Text style={[styles.typeButtonText, { color: active ? colors.primarySoft : colors.muted }]}>{label}</Text>
+    </ScalePressable>
   );
 }
 
@@ -248,7 +271,7 @@ const styles = StyleSheet.create({
   typeToggle: { flexDirection: 'row', gap: 8 },
   typeButton: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: FinanceTheme.colors.border, backgroundColor: FinanceTheme.colors.surfaceRaised },
   typeButtonCompact: { flex: 0, minHeight: 32, paddingHorizontal: 10, borderRadius: 999 },
-  typeButtonActive: { backgroundColor: 'rgba(128,92,255,0.22)', borderColor: FinanceTheme.colors.primary },
+  typeButtonActive: { backgroundColor: 'rgba(11,130,126,0.16)', borderColor: FinanceTheme.colors.primary },
   typeButtonText: { color: FinanceTheme.colors.muted, fontSize: 10, fontWeight: '700' },
   typeButtonTextActive: { color: FinanceTheme.colors.primarySoft },
   field: { gap: 6 },
@@ -259,7 +282,7 @@ const styles = StyleSheet.create({
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   categoryChoice: { width: '18%', minWidth: 62, flexGrow: 1, minHeight: 76, alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 13, borderWidth: 1, borderColor: FinanceTheme.colors.border, backgroundColor: FinanceTheme.colors.surfaceRaised },
-  categoryChoiceActive: { borderColor: FinanceTheme.colors.primary, backgroundColor: 'rgba(128,92,255,0.2)' },
+  categoryChoiceActive: { borderColor: FinanceTheme.colors.primary, backgroundColor: 'rgba(11,130,126,0.16)' },
   categoryIcon: { fontSize: 21, color: FinanceTheme.colors.primarySoft },
   categoryLabel: { color: FinanceTheme.colors.muted, fontSize: 11, fontWeight: '700' },
   dateButton: { minHeight: 46, borderRadius: 11, borderWidth: 1, borderColor: FinanceTheme.colors.border, backgroundColor: FinanceTheme.colors.background, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

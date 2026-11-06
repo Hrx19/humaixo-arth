@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -22,6 +21,8 @@ import {
 } from '@/services/transaction-intelligence-service';
 import { useAuth } from '@/auth/auth-context';
 import { useFinanceColors } from '@/constants/finance-theme';
+import { ScalePressable } from '@/components/scale-pressable';
+import { SkeletonBlock } from '@/components/finance-ui';
 
 const PAGE_SIZE = 30;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -164,14 +165,14 @@ export default function TransactionsScreen(): React.JSX.Element {
   );
 
   if (status === 'loading') {
-    return <FinanceScreen title="Activity" activeTab="transactions"><ActivityIndicator color={colors.primarySoft} /></FinanceScreen>;
+    return <FinanceScreen title="Activity" activeTab="transactions"><TransactionSkeletons /></FinanceScreen>;
   }
   if (!token) {
     return (
       <FinanceScreen title="Activity" subtitle="Sign in to search and review your private transaction history." activeTab="transactions">
-        <TouchableOpacity onPress={() => router.push('/login')} style={[styles.emptyAction, { backgroundColor: colors.primary }]}>
+        <ScalePressable onPress={() => router.push('/login')} style={[styles.emptyAction, { backgroundColor: colors.primary }]}>
           <Text style={styles.emptyActionText}>Sign in</Text>
-        </TouchableOpacity>
+        </ScalePressable>
       </FinanceScreen>
     );
   }
@@ -185,7 +186,7 @@ export default function TransactionsScreen(): React.JSX.Element {
         renderItem={({ item }) => <TransactionCard item={item} onPress={() => router.push(`/(tabs)/transactions/${item.id}`)} />}
         ListHeaderComponent={filterHeader}
         ListEmptyComponent={() => {
-          if (query.isLoading) return <ActivityIndicator style={styles.centered} color={colors.primarySoft} />;
+          if (query.isLoading) return <TransactionSkeletons />;
           if (query.isError) return <ErrorPanel message={query.error.message} onRetry={() => void query.refetch()} colors={colors} />;
           return <Text style={[styles.emptyText, { color: colors.muted }]}>No transactions match these filters. Imported and manually entered activity will appear here.</Text>;
         }}
@@ -216,7 +217,7 @@ function FilterChip({
   colors: ReturnType<typeof useFinanceColors>;
 }): React.JSX.Element {
   return (
-    <TouchableOpacity
+    <ScalePressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected }}
@@ -226,7 +227,7 @@ function FilterChip({
       ]}
     >
       <Text numberOfLines={1} style={[styles.chipText, { color: selected ? colors.primarySoft : colors.muted }]}>{label}</Text>
-    </TouchableOpacity>
+    </ScalePressable>
   );
 }
 
@@ -240,7 +241,7 @@ function TransactionCard({
   const colors = useFinanceColors();
   const isCredit = item.type === 'credit';
   return (
-    <TouchableOpacity
+    <ScalePressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${item.merchant}, ${formatDecimalINR(item.amount)}, ${item.type}`}
@@ -258,7 +259,7 @@ function TransactionCard({
         ) : null}
       </View>
       <Text style={[styles.amount, { color: isCredit ? colors.green : colors.red }]}>{isCredit ? '+' : '−'}{formatDecimalINR(item.amount)}</Text>
-    </TouchableOpacity>
+    </ScalePressable>
   );
 }
 
@@ -274,7 +275,7 @@ function ErrorPanel({
   return (
     <View style={[styles.errorPanel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.errorText, { color: colors.red }]}>{message}</Text>
-      <TouchableOpacity onPress={onRetry}><Text style={[styles.retryText, { color: colors.primarySoft }]}>Try again</Text></TouchableOpacity>
+      <ScalePressable onPress={onRetry}><Text style={[styles.retryText, { color: colors.primarySoft }]}>Try again</Text></ScalePressable>
     </View>
   );
 }
@@ -283,6 +284,13 @@ const styles = StyleSheet.create({
   screenContent: { flex: 1 },
   list: { flex: 1, minHeight: 0 },
   listContent: { paddingBottom: 28, gap: 10 },
+  loadingList: { gap: 10, paddingVertical: 6 },
+  loadingMarker: { width: 4, minHeight: 56, borderRadius: 4 },
+  loadingCopy: { flex: 1, gap: 7 },
+  loadingMerchant: { width: '70%', height: 13, borderRadius: 6 },
+  loadingDescription: { width: '92%', height: 10, borderRadius: 5 },
+  loadingMeta: { width: '64%', height: 9, borderRadius: 5 },
+  loadingAmount: { width: 52, height: 13, borderRadius: 6 },
   listHeader: { width: '100%', gap: 10, paddingBottom: 8 },
   searchInput: { minHeight: 46, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, fontSize: 14 },
   filterLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8, marginTop: 3 },
@@ -315,3 +323,22 @@ const styles = StyleSheet.create({
   emptyAction: { padding: 14, borderRadius: 14, alignItems: 'center' },
   emptyActionText: { color: '#ffffff', fontWeight: '800' },
 });
+
+function TransactionSkeletons(): React.JSX.Element {
+  const colors = useFinanceColors();
+  return (
+    <View style={styles.loadingList} accessibilityLabel="Loading transactions">
+      {[0, 1, 2, 3].map((item) => (
+        <View key={item} style={[styles.transactionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <SkeletonBlock style={styles.loadingMarker} />
+          <View style={styles.loadingCopy}>
+            <SkeletonBlock style={styles.loadingMerchant} />
+            <SkeletonBlock style={styles.loadingDescription} />
+            <SkeletonBlock style={styles.loadingMeta} />
+          </View>
+          <SkeletonBlock style={styles.loadingAmount} />
+        </View>
+      ))}
+    </View>
+  );
+}

@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
   amountLabel: { flex: 1, gap: 5 },
   amountCaption: { fontSize: 10, fontWeight: '700' },
   amountValue: { fontSize: 14, fontWeight: '800' },
-  repaymentCard: { gap: 12, borderColor: '#6844df' },
+  repaymentCard: { gap: 12, borderColor: '#0b7774' },
   repaymentHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   closeText: { fontSize: 12, fontWeight: '800' },
   repaymentDescription: { fontSize: 12, lineHeight: 18 },

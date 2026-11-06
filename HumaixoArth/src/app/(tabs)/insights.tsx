@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
   insightTile: { flexDirection: 'row', gap: 10, padding: 13 },
   insightAmber: { borderColor: 'rgba(245,184,75,0.22)' },
   insightGreen: { borderColor: 'rgba(33,201,151,0.2)' },
-  insightPurple: { borderColor: 'rgba(128,92,255,0.25)' },
+  insightPurple: { borderColor: 'rgba(11,130,126,0.25)' },
   insightMarker: { width: 9, height: 9, borderRadius: 5, marginTop: 4 },
   markerAmber: { backgroundColor: FinanceTheme.colors.amber },
   markerGreen: { backgroundColor: FinanceTheme.colors.green },

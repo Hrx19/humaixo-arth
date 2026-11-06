@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
     gap: 16,
-    backgroundColor: '#090910',
+    backgroundColor: '#05090f',
   },
   title: {
     color: '#f8fafc',

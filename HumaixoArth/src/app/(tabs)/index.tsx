@@ -1,16 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { FinanceScreen } from '@/components/finance-screen';
 import { useAuth } from '@/auth/auth-context';
 import { useFinanceColors } from '@/constants/finance-theme';
+import { ScalePressable } from '@/components/scale-pressable';
+import { SkeletonBlock } from '@/components/finance-ui';
+import { triggerLightImpact } from '@/utils/haptics';
 import {
   formatDecimalINR,
   TransactionIntelligenceService,
@@ -50,7 +47,18 @@ export default function HomeScreen(): React.JSX.Element {
   const hasTransactions = (recentQuery.data?.pagination.total ?? 0) > 0;
 
   if (status === 'loading') {
-    return <FinanceScreen title="Overview" activeTab="home"><ActivityIndicator color={colors.primarySoft} /></FinanceScreen>;
+    return (
+      <FinanceScreen title="Overview" activeTab="home">
+        <View style={styles.metricGrid}>
+          {[0, 1, 2, 3].map((item) => (
+            <View key={item} style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <SkeletonBlock style={styles.metricSkeletonLabel} />
+              <SkeletonBlock style={styles.skeleton} />
+            </View>
+          ))}
+        </View>
+      </FinanceScreen>
+    );
   }
   if (!token) {
     return (
@@ -68,7 +76,7 @@ export default function HomeScreen(): React.JSX.Element {
     <FinanceScreen title="Overview" subtitle="A clear view of your accounts and cash flow." activeTab="home">
       <View style={styles.periodRow}>
         {([7, 30, 90] as const).map((days) => (
-          <TouchableOpacity
+          <ScalePressable
             key={days}
             accessibilityRole="button"
             accessibilityState={{ selected: periodDays === days }}
@@ -82,7 +90,7 @@ export default function HomeScreen(): React.JSX.Element {
             ]}
           >
             <Text style={[styles.periodText, { color: periodDays === days ? colors.primarySoft : colors.muted }]}>{days === 7 ? '7 days' : days === 30 ? '30 days' : '90 days'}</Text>
-          </TouchableOpacity>
+          </ScalePressable>
         ))}
       </View>
 
@@ -95,14 +103,22 @@ export default function HomeScreen(): React.JSX.Element {
       </View>
       <View style={styles.sectionHeading}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent transactions</Text>
-        <TouchableOpacity onPress={() => router.push('/transactions')} accessibilityRole="link">
+        <ScalePressable onPress={() => router.push('/transactions')} accessibilityRole="link">
           <Text style={[styles.link, { color: colors.primarySoft }]}>See all</Text>
-        </TouchableOpacity>
+        </ScalePressable>
       </View>
       {recentQuery.isLoading ? (
         <View style={[styles.loadingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <ActivityIndicator color={colors.primarySoft} />
-          <Text style={[styles.body, { color: colors.muted }]}>Loading recent activity…</Text>
+          {[0, 1, 2].map((item) => (
+            <View key={item} style={styles.recentSkeleton}>
+              <SkeletonBlock style={styles.skeletonAvatar} />
+              <View style={styles.recentSkeletonCopy}>
+                <SkeletonBlock style={styles.skeletonName} />
+                <SkeletonBlock style={styles.skeletonMeta} />
+              </View>
+              <SkeletonBlock style={styles.skeletonAmount} />
+            </View>
+          ))}
         </View>
       ) : recentQuery.isError ? (
         <ErrorCard message={recentQuery.error.message} onRetry={() => void recentQuery.refetch()} colors={colors} />
@@ -149,7 +165,7 @@ function MetricCard({
     <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.metricTitle, { color: colors.muted }]}>{title}</Text>
       {loading ? (
-        <View style={[styles.skeleton, { backgroundColor: colors.surfaceRaised }]} />
+        <SkeletonBlock style={styles.skeleton} />
       ) : (
         <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.metricValue, { color: positive ? colors.green : negative ? colors.red : colors.text }]}>
           {value === undefined ? '—' : formatDecimalINR(value)}
@@ -169,7 +185,7 @@ function RecentTransaction({
   const colors = useFinanceColors();
   const credit = transaction.type === 'credit';
   return (
-    <TouchableOpacity onPress={onPress} style={[styles.recentCard, { backgroundColor: colors.surface, borderColor: colors.border }]} accessibilityRole="button">
+    <ScalePressable onPress={onPress} style={[styles.recentCard, { backgroundColor: colors.surface, borderColor: colors.border }]} accessibilityRole="button">
       <View style={styles.recentCopy}>
         <Text numberOfLines={1} style={[styles.recentName, { color: colors.text }]}>{transaction.counterparty || transaction.merchant || 'Unknown counterparty'}</Text>
         <Text numberOfLines={1} style={[styles.recentMeta, { color: colors.muted }]}>
@@ -180,7 +196,7 @@ function RecentTransaction({
         ) : null}
       </View>
       <Text style={[styles.recentAmount, { color: credit ? colors.green : colors.red }]}>{credit ? '+' : '−'}{formatDecimalINR(transaction.amount)}</Text>
-    </TouchableOpacity>
+    </ScalePressable>
   );
 }
 
@@ -194,9 +210,9 @@ function PrimaryAction({
   colors: ReturnType<typeof useFinanceColors>;
 }): React.JSX.Element {
   return (
-    <TouchableOpacity onPress={onPress} style={[styles.action, { backgroundColor: colors.primary }]} accessibilityRole="button">
+    <ScalePressable onPress={() => { triggerLightImpact(); onPress(); }} style={[styles.action, { backgroundColor: colors.primary }]} accessibilityRole="button">
       <Text style={styles.actionText}>{label}</Text>
-    </TouchableOpacity>
+    </ScalePressable>
   );
 }
 
@@ -212,7 +228,7 @@ function ErrorCard({
   return (
     <View style={[styles.errorCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.body, { color: colors.red }]}>{message}</Text>
-      <TouchableOpacity onPress={onRetry}><Text style={[styles.link, { color: colors.primarySoft }]}>Try again</Text></TouchableOpacity>
+      <ScalePressable onPress={onRetry}><Text style={[styles.link, { color: colors.primarySoft }]}>Try again</Text></ScalePressable>
     </View>
   );
 }
@@ -226,6 +242,7 @@ const styles = StyleSheet.create({
   metricTitle: { fontSize: 11, fontWeight: '700', lineHeight: 16 },
   metricValue: { fontSize: 23, fontWeight: '900', letterSpacing: -0.5 },
   skeleton: { height: 26, width: '65%', borderRadius: 7 },
+  metricSkeletonLabel: { width: '72%', height: 12, borderRadius: 6 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 7 },
   sectionTitle: { fontSize: 17, fontWeight: '900' },
   link: { fontSize: 12, fontWeight: '800' },
@@ -241,6 +258,12 @@ const styles = StyleSheet.create({
   body: { fontSize: 13, lineHeight: 20 },
   action: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, borderRadius: 12, marginTop: 3 },
   actionText: { color: '#ffffff', fontWeight: '800', fontSize: 13 },
-  loadingCard: { minHeight: 95, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  loadingCard: { minHeight: 95, borderRadius: 15, borderWidth: 1, gap: 10, padding: 14 },
+  recentSkeleton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  skeletonAvatar: { width: 38, height: 38, borderRadius: 13 },
+  recentSkeletonCopy: { flex: 1, gap: 6 },
+  skeletonName: { width: '72%', height: 12, borderRadius: 6 },
+  skeletonMeta: { width: '52%', height: 9, borderRadius: 5 },
+  skeletonAmount: { width: 48, height: 14, borderRadius: 6 },
   errorCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 },
 });
