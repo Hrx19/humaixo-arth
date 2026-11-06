@@ -38,7 +38,6 @@ export default function MoneyToolsScreen(): React.JSX.Element {
         { route: '/people', title: 'People', description: 'Review activity connected to people.' },
         { route: '/insights', title: 'Insights', description: 'Explore spending patterns and trends.' },
         { route: '/history', title: 'Balance history', description: 'See account balances over time.' },
-        { route: '/ai-assistant', title: 'Humaixo AI', description: 'Ask grounded questions about your financial records.' },
         { route: '/notifications', title: 'Notifications', description: 'Review budget, anomaly, and import alerts.' },
       ] as const).map((item) => (
         <TouchableOpacity key={item.route} onPress={() => router.push(item.route)} accessibilityRole="link">

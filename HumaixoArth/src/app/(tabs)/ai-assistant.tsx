@@ -1,57 +1,116 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
+  Alert,
   StyleSheet,
+  Switch,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { FinanceScreen } from '@/components/finance-screen';
+import { AIChatInterface } from '@/components/AIChatInterface';
+import { AuditFeed } from '@/components/AuditFeed';
+import { MasterCodeModal } from '@/components/MasterCodeModal';
 import { useAuth } from '@/auth/auth-context';
 import { useFinanceColors } from '@/constants/finance-theme';
-import { Phase6Service, type GroundedAiAnswer } from '@/services/phase6-service';
-
-type ChatMessage = {
-  id: string;
-  role: 'user' | 'assistant';
-  text: string;
-  answer?: GroundedAiAnswer;
-};
-
-function displayAmount(amount: string): string {
-  return amount;
-}
+import { AiApiService } from '@/services/ai-api-service';
 
 export default function AiAssistantScreen(): React.JSX.Element {
   const router = useRouter();
   const colors = useFinanceColors();
   const { token, status } = useAuth();
-  const [question, setQuestion] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const query = useMutation({
-    mutationFn: (value: string) => Phase6Service.ask(token!, value),
-    onSuccess: (answer) => setMessages((items) => [
-      ...items,
-      { id: `assistant-${Date.now()}`, role: 'assistant', text: answer.direct_answer, answer },
-    ]),
-    onError: (error: Error) => setMessages((items) => [
-      ...items,
-      { id: `error-${Date.now()}`, role: 'assistant', text: error.message },
-    ]),
+  const queryClient = useQueryClient();
+  const [masterMode, setMasterMode] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [verifyingMasterCode, setVerifyingMasterCode] = useState(false);
+  const masterStatus = useQuery({
+    queryKey: ['owner-master-status', token],
+    queryFn: () => AiApiService.masterCodeStatus(token!),
+    enabled: Boolean(token && status === 'authenticated'),
+    staleTime: 60_000,
   });
 
-  const ask = (): void => {
-    const value = question.trim();
-    if (!value || !token || query.isPending) return;
-    setMessages((items) => [...items, { id: `user-${Date.now()}`, role: 'user', text: value }]);
-    setQuestion('');
-    query.mutate(value);
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve().then(async () => {
+      const hasSession = token ? await AiApiService.hasOwnerSession() : false;
+      if (active) setMasterMode(hasSession);
+    }).catch(() => {
+      if (active) setMasterMode(false);
+    });
+    return () => { active = false; };
+  }, [token]);
+
+  const auditQuery = useQuery({
+    queryKey: ['owner-ai-audit', token],
+    queryFn: () => AiApiService.listAudit(token!),
+    enabled: Boolean(token && status === 'authenticated'),
+    refetchInterval: masterMode ? 30_000 : false,
+  });
+  const mutationQuery = useQuery({
+    queryKey: ['owner-ai-mutations', token],
+    queryFn: () => AiApiService.listMutations(token!),
+    enabled: Boolean(token && masterMode && status === 'authenticated'),
+    refetchInterval: masterMode ? 30_000 : false,
+  });
+  const emergency = useMutation({
+    mutationFn: (action: 'cache-flush' | 'restart-service') => AiApiService.executeEmergencyAction(token!, action),
+    onSuccess: async (result, action) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['owner-ai-audit', token] }),
+        queryClient.invalidateQueries({ queryKey: ['owner-ai-mutations', token] }),
+      ]);
+      Alert.alert(
+        'Emergency action',
+        action === 'cache-flush'
+          ? `Cache flush completed. ${result.clearedEntries ?? 0} entries cleared.`
+          : 'Graceful restart requested.',
+      );
+    },
+  });
+
+  const toggleMasterMode = async (enabled: boolean): Promise<void> => {
+    setModalError(null);
+    if (enabled) {
+      setEnrolling(masterStatus.data?.enrolled === false);
+      setModalVisible(true);
+      return;
+    }
+    try {
+      await AiApiService.clearOwnerSession(token!);
+      setMasterMode(false);
+    } catch (error) {
+      setMasterMode(false);
+      setModalError(error instanceof Error ? error.message : 'Could not revoke owner session.');
+    }
+  };
+
+  const verify = async (code: string): Promise<void> => {
+    if (!token) throw new Error('Sign in before enabling Master Mode.');
+    if (verifyingMasterCode) return;
+    setModalError(null);
+    setVerifyingMasterCode(true);
+    try {
+      if (enrolling) await AiApiService.enrollMasterCode(token, code);
+      else await AiApiService.verifyMasterCode(token, code);
+      setMasterMode(true);
+      setModalVisible(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['owner-ai-audit', token] }),
+        queryClient.invalidateQueries({ queryKey: ['owner-master-status', token] }),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Master Code verification failed.';
+      setModalError(message);
+      throw error;
+    } finally {
+      setVerifyingMasterCode(false);
+    }
   };
 
   if (status === 'loading') {
@@ -60,8 +119,8 @@ export default function AiAssistantScreen(): React.JSX.Element {
   if (!token) {
     return (
       <FinanceScreen title="Humaixo AI" subtitle="Sign in to ask questions about your private financial records.">
-        <TouchableOpacity onPress={() => router.push('/login')} style={[styles.primaryButton, { backgroundColor: colors.primary }]}>
-          <Text style={styles.primaryButtonText}>Sign in</Text>
+        <TouchableOpacity onPress={() => router.push('/login')} style={[styles.button, { backgroundColor: colors.primary }]}>
+          <Text style={styles.buttonText}>Sign in</Text>
         </TouchableOpacity>
       </FinanceScreen>
     );
@@ -70,126 +129,116 @@ export default function AiAssistantScreen(): React.JSX.Element {
   return (
     <FinanceScreen
       title="Humaixo AI"
-      subtitle="Answers use only your recorded transactions and accounts. Every result shows its calculation and evidence."
+      subtitle="Grounded read-only financial answers. Privileged controls are owner-gated and audited."
     >
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {messages.length === 0 ? (
-          <View style={[styles.introCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.introTitle, { color: colors.text }]}>Ask about your records</Text>
-            <Text style={[styles.introText, { color: colors.muted }]}>
-              Try “How much did I spend on food last month?” or “What is my balance in Savings?”
-            </Text>
-            <Text style={[styles.privacyNote, { color: colors.subtle }]}>
-              No statement files, account numbers, or transaction descriptions are sent to an external AI provider.
+      <View style={[styles.accessCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.accessHeader}>
+          <View style={styles.accessCopy}>
+            <Text style={[styles.accessTitle, { color: colors.text }]}>Master Mode</Text>
+            <Text style={[styles.accessText, { color: colors.muted }]}>
+              {masterMode ? 'Owner session active · expires automatically' : 'Emergency controls are locked'}
             </Text>
           </View>
-        ) : null}
-        <ScrollView
-          style={styles.chat}
-          contentContainerStyle={styles.messageList}
-          keyboardShouldPersistTaps="handled"
-        >
-          {messages.map((message) => (
-            <View
-              key={message.id}
-              style={[
-                styles.message,
-                message.role === 'user'
-                  ? [styles.userMessage, { backgroundColor: colors.primary }]
-                  : [styles.assistantMessage, { backgroundColor: colors.surface, borderColor: colors.border }],
-              ]}
-            >
-              <Text style={[
-                styles.messageText,
-                { color: message.role === 'user' ? '#ffffff' : colors.text },
-              ]}>
-                {message.text}
-              </Text>
-              {message.answer ? (
-                <View style={[styles.answerDetails, { borderTopColor: colors.border }]}>
-                  <Text style={[styles.answerAmount, { color: colors.primarySoft }]}>
-                    {displayAmount(message.answer.amount)}
-                  </Text>
-                  <Text style={[styles.answerMeta, { color: colors.muted }]}>
-                    Period: {message.answer.period} · {message.answer.transaction_count} transaction(s)
-                  </Text>
-                  <Text style={[styles.explanation, { color: colors.muted }]}>
-                    {message.answer.calculation_explanation}
-                  </Text>
-                  {message.answer.supporting_transaction_ids.map((id) => (
-                    <TouchableOpacity
-                      key={id}
-                      onPress={() => router.push(`/(tabs)/transactions/${id}`)}
-                      accessibilityRole="link"
-                      style={styles.evidenceLink}
-                    >
-                      <Text style={[styles.evidenceText, { color: colors.primarySoft }]}>
-                        Review transaction · {id.slice(0, 8)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
-            </View>
-          ))}
-          {query.isPending ? (
-            <View style={[styles.pending, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <ActivityIndicator size="small" color={colors.primarySoft} />
-              <Text style={[styles.pendingText, { color: colors.muted }]}>Checking your records…</Text>
-            </View>
-          ) : null}
-        </ScrollView>
-        <View style={[styles.composer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <TextInput
-            value={question}
-            onChangeText={setQuestion}
-            placeholder="Ask a question about your finances"
-            placeholderTextColor={colors.subtle}
-            maxLength={500}
-            multiline
-            accessibilityLabel="Ask a question about your financial records"
-            style={[styles.input, { color: colors.text }]}
-            onSubmitEditing={ask}
-            returnKeyType="send"
+          <Switch
+            value={masterMode}
+            onValueChange={(value) => void toggleMasterMode(value)}
+            disabled={!masterStatus.data || masterStatus.isError}
+            accessibilityLabel="Toggle Master Mode"
+            trackColor={{ false: colors.border, true: colors.primary }}
           />
-          <TouchableOpacity
-            onPress={ask}
-            disabled={!question.trim() || query.isPending}
-            accessibilityRole="button"
-            accessibilityLabel="Send question"
-            style={[styles.sendButton, { backgroundColor: colors.primary, opacity: !question.trim() || query.isPending ? 0.55 : 1 }]}
-          >
-            <Text style={styles.sendButtonText}>{query.isPending ? '…' : 'Ask'}</Text>
-          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+        {!masterMode && masterStatus.data?.enrolled === false ? (
+          <TouchableOpacity
+            onPress={() => {
+              setEnrolling(true);
+              setModalError(null);
+              setModalVisible(true);
+            }}
+            style={styles.setupLink}
+          >
+            <Text style={[styles.setupText, { color: colors.primarySoft }]}>First-time owner setup</Text>
+          </TouchableOpacity>
+        ) : null}
+        {masterStatus.isError ? (
+          <Text style={[styles.accessText, { color: colors.muted }]}>Owner controls are unavailable for this account.</Text>
+        ) : null}
+      </View>
+
+      <AIChatInterface token={token} />
+
+      {masterMode ? (
+        <View style={[styles.console, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.consoleTitle, { color: colors.text }]}>Emergency Console · Tier 3</Text>
+          <Text style={[styles.accessText, { color: colors.muted }]}>
+            Each action requires a live owner session and creates an audit record. Restart invokes graceful shutdown.
+          </Text>
+          {emergency.isError ? <Text style={[styles.accessText, { color: colors.red }]}>{emergency.error.message}</Text> : null}
+          <View style={styles.actions}>
+            <TouchableOpacity
+              onPress={() => emergency.mutate('cache-flush')}
+              disabled={emergency.isPending}
+              style={[styles.button, styles.secondaryButton, { borderColor: colors.border }]}
+            >
+              <Text style={[styles.actionText, { color: colors.text }]}>{emergency.isPending ? 'Working…' : 'Flush cache'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => Alert.alert(
+                'Restart service?',
+                'The API process will shut down gracefully and relies on its process manager to restart it.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Restart', style: 'destructive', onPress: () => emergency.mutate('restart-service') },
+                ],
+              )}
+              disabled={emergency.isPending}
+              style={[styles.button, { backgroundColor: colors.red }]}
+            >
+              <Text style={styles.buttonText}>Restart service</Text>
+            </TouchableOpacity>
+          </View>
+          <AuditFeed
+            entries={auditQuery.data}
+            mutations={mutationQuery.data}
+            loading={auditQuery.isLoading || mutationQuery.isLoading}
+            error={auditQuery.error?.message ?? mutationQuery.error?.message ?? null}
+          />
+        </View>
+      ) : (
+        <AuditFeed
+          entries={auditQuery.data}
+          loading={auditQuery.isLoading}
+          error={auditQuery.error?.message ?? null}
+        />
+      )}
+
+      <MasterCodeModal
+        visible={modalVisible}
+        mode={enrolling ? 'enroll' : 'verify'}
+        busy={verifyingMasterCode}
+        error={modalError}
+        onCancel={() => {
+          setModalVisible(false);
+          setModalError(null);
+        }}
+        onSubmit={verify}
+      />
     </FinanceScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  introCard: { borderWidth: 1, borderRadius: 18, padding: 18, gap: 8, marginBottom: 16 },
-  introTitle: { fontSize: 16, fontWeight: '800' },
-  introText: { fontSize: 13, lineHeight: 19 },
-  privacyNote: { fontSize: 11, lineHeight: 16, marginTop: 5 },
-  chat: { maxHeight: 420 },
-  messageList: { gap: 12, paddingVertical: 8 },
-  message: { maxWidth: '92%', borderRadius: 18, padding: 14, gap: 9 },
-  userMessage: { alignSelf: 'flex-end' },
-  assistantMessage: { alignSelf: 'flex-start', borderWidth: 1 },
-  messageText: { fontSize: 14, lineHeight: 20 },
-  answerDetails: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 9, gap: 6 },
-  answerAmount: { fontSize: 19, fontWeight: '800' },
-  answerMeta: { fontSize: 11, lineHeight: 16 },
-  explanation: { fontSize: 12, lineHeight: 17 },
-  evidenceLink: { paddingTop: 3, minHeight: 28, justifyContent: 'center' },
-  evidenceText: { fontSize: 12, fontWeight: '700' },
-  pending: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: 14, padding: 12 },
-  pendingText: { fontSize: 12 },
-  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, borderWidth: 1, borderRadius: 16, padding: 8, marginTop: 8 },
-  input: { flex: 1, minHeight: 42, maxHeight: 120, paddingHorizontal: 8, paddingVertical: 9, fontSize: 14 },
-  sendButton: { minWidth: 56, minHeight: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  sendButtonText: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
-  primaryButton: { minHeight: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  primaryButtonText: { color: '#ffffff', fontWeight: '800' },
+  accessCard: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 8 },
+  accessHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  accessCopy: { flex: 1, gap: 3 },
+  accessTitle: { fontSize: 15, fontWeight: '800' },
+  accessText: { fontSize: 11, lineHeight: 16 },
+  setupLink: { alignSelf: 'flex-start', paddingVertical: 6 },
+  setupText: { fontSize: 12, fontWeight: '700' },
+  console: { borderWidth: 1, borderRadius: 18, padding: 14, gap: 12 },
+  consoleTitle: { fontSize: 16, fontWeight: '800' },
+  actions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  button: { minHeight: 42, borderRadius: 12, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
+  secondaryButton: { backgroundColor: 'transparent', borderWidth: 1 },
+  buttonText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  actionText: { fontSize: 12, fontWeight: '800' },
 });

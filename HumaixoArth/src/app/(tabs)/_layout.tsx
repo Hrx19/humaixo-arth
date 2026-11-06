@@ -45,31 +45,18 @@ export default function MainTabsLayout(): React.JSX.Element {
         }}
       />
       <Tabs.Screen
+        name="ai-assistant"
+        options={{
+          title: 'AI',
+          tabBarAccessibilityLabel: 'Humaixo AI',
+          tabBarIcon: ({ color, size }) => <Ionicons name="sparkles-outline" color={String(color)} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="budgets"
         options={{
           title: 'Budgets',
           tabBarIcon: ({ color, size }) => <Ionicons name="pie-chart-outline" color={String(color)} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="loans"
-        options={{
-          title: 'Loans',
-          tabBarIcon: ({ color, size }) => <Ionicons name="briefcase-outline" color={String(color)} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="recurring"
-        options={{
-          title: 'Recurring',
-          tabBarIcon: ({ color, size }) => <Ionicons name="refresh-outline" color={String(color)} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="transfers"
-        options={{
-          title: 'Transfers',
-          tabBarIcon: ({ color, size }) => <Ionicons name="swap-horizontal-outline" color={String(color)} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -79,6 +66,9 @@ export default function MainTabsLayout(): React.JSX.Element {
           tabBarIcon: ({ color, size }) => <Ionicons name="ellipsis-horizontal" color={String(color)} size={size} />,
         }}
       />
+      <Tabs.Screen name="loans" options={{ href: null }} />
+      <Tabs.Screen name="recurring" options={{ href: null }} />
+      <Tabs.Screen name="transfers" options={{ href: null }} />
       <Tabs.Screen name="people" options={{ href: null }} />
       <Tabs.Screen name="history" options={{ href: null }} />
       <Tabs.Screen name="insights" options={{ href: null }} />
@@ -86,7 +76,6 @@ export default function MainTabsLayout(): React.JSX.Element {
       <Tabs.Screen name="transactions/[id]" options={{ href: null }} />
       <Tabs.Screen name="statements/upload" options={{ href: null }} />
       <Tabs.Screen name="statements/review/[statementId]" options={{ href: null }} />
-      <Tabs.Screen name="ai-assistant" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
     </Tabs>
   );

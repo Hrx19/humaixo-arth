@@ -9,6 +9,26 @@ export type GroundedAiAnswer = {
   supporting_transaction_ids: string[];
 };
 
+export type AiPermissionStatus = {
+  level: 1;
+  label: string;
+  capabilities: {
+    readOwnFinancialRecords: boolean;
+    reviewOwnAiActivity: boolean;
+    modifyApplication: boolean;
+    executeCommands: boolean;
+    privilegedAccess: boolean;
+  };
+};
+
+export type AiAuditEntry = {
+  id: string;
+  action: 'financial_query';
+  outcome: 'answered' | 'unsupported' | 'account_not_found' | 'rejected' | 'failed';
+  question_length: number;
+  created_at: string;
+};
+
 export type UserNotification = {
   id: string;
   type: 'budget_threshold' | 'anomaly' | 'import_completed';
@@ -72,6 +92,18 @@ async function request<T>(
 export const Phase6Service = {
   ask(token: string, question: string): Promise<GroundedAiAnswer> {
     return request('/api/v1/ai/query', token, 'POST', { question });
+  },
+
+  permissionStatus(token: string): Promise<{ success: true; data: AiPermissionStatus }> {
+    return request('/api/v1/ai/permission-status', token);
+  },
+
+  async listAiActivity(token: string, limit = 20): Promise<AiAuditEntry[]> {
+    const result = await request<{ success: true; data: AiAuditEntry[] }>(
+      `/api/v1/ai/audit?limit=${limit}`,
+      token,
+    );
+    return result.data;
   },
 
   async listNotifications(token: string): Promise<UserNotification[]> {
