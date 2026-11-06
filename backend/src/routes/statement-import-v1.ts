@@ -13,6 +13,7 @@ import { getAccountBalanceAt } from '../services/account-balances';
 import { statementStorage } from '../services/statement-storage';
 import { getStatementParser } from '../services/statement_parser';
 import { findOrCreateCategory, findOrCreatePerson } from '../services/financial-directory';
+import { recordNotification } from '../services/notifications';
 import Decimal from 'decimal.js';
 import type { NormalizedStatementRow, ParsedStatementRow } from '../services/statement_parser';
 
@@ -544,6 +545,13 @@ statementImportV1Router.post('/:id/confirm', async (request, response) => {
       statement.result = result;
       await statement.save({ session });
       responseStatus = 201;
+    });
+    await recordNotification({
+      userId,
+      type: 'import_completed',
+      message: 'Statement import completed. Your imported transactions are ready to review.',
+      relatedEntityId: sourceStatement._id,
+      dedupeKey: `statement-import:${sourceStatement._id.toString()}`,
     });
     return response.status(responseStatus).json({ success: true, data: result });
   } catch (error) {

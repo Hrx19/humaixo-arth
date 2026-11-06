@@ -161,6 +161,11 @@ const environmentSchema = z.object({
   MONGO_MAX_RETRIES: z.coerce.number().int().min(0).max(100).default(10),
   AI_SERVICE_URL: z.string().url().default('http://localhost:5001/parse-sms'),
   AI_SERVICE_API_KEY: z.string().default(''),
+  AI_OWNER_USER_IDS: z
+    .string()
+    .default('')
+    .transform((value) => [...new Set(value.split(',').map((id) => id.trim().toLowerCase()).filter(Boolean))])
+    .pipe(z.array(z.string().regex(/^[a-f\d]{24}$/i, 'Owner IDs must be MongoDB ObjectIds.'))),
   GITHUB_OAUTH_CALLBACK_URL: z.string().trim().default('').refine(
     (value) => !value || isHttpsUrl(value),
     'GITHUB_OAUTH_CALLBACK_URL must be an HTTPS URL when set.',

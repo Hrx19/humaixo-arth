@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import { CategoryBudgetModel, type BudgetPeriod } from '../../models/Budget';
 import { CategoryModel } from '../../models/Category';
 import { TransactionModel } from '../../models/Transaction';
+import { recordNotification } from './notifications';
 
 type BudgetMutation = {
   categoryId: Types.ObjectId;
@@ -178,5 +179,16 @@ export async function getBudgetProgress(
     };
   }));
 
+  await Promise.all(results
+    .filter((progress) => new Decimal(progress.percentageUsed).gt(80))
+    .map((progress) => recordNotification({
+      userId,
+      type: 'budget_threshold',
+      message:
+        `${progress.categoryName ?? 'A budget'} is at ${progress.percentageUsed}% ` +
+        `of its ${progress.budgetAmount} limit for this budget period.`,
+      relatedEntityId: new Types.ObjectId(progress.id),
+      dedupeKey: `budget:${progress.id}:${progress.periodStart}`,
+    })));
   return results;
 }

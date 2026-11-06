@@ -27,6 +27,13 @@ import { transfersV1Router } from './routes/transfers-v1';
 import { recurringV1Router } from './routes/recurring-v1';
 import { budgetsV1Router } from './routes/budgets-v1';
 import { loansV1Router } from './routes/loans-v1';
+import { aiQueryV1Router } from './routes/ai-query-v1';
+import { anomaliesV1Router } from './routes/anomalies-v1';
+import { notificationsV1Router } from './routes/notifications-v1';
+import { aiMasterV1Router } from './routes/ai-master-v1';
+import { aiActionsV1Router } from './routes/ai-actions-v1';
+import { aiMutationsV1Router } from './routes/ai-mutations-v1';
+import { aiEmergencyV1Router } from './routes/ai-emergency-v1';
 
 export function createApp(): Express {
   const app = express();
@@ -44,7 +51,7 @@ export function createApp(): Express {
       callback(new HttpError(403, 'This browser origin is not allowed.', 'CORS_ORIGIN_BLOCKED'));
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Owner-Session-Token'],
     maxAge: 600,
   };
 
@@ -90,6 +97,13 @@ export function createApp(): Express {
   app.use('/api/v1/recurring', recurringV1Router);
   app.use('/api/v1/budgets', budgetsV1Router);
   app.use('/api/v1/loans', loansV1Router);
+  app.use('/api/v1/ai', aiQueryV1Router);
+  app.use('/api/v1/anomalies', anomaliesV1Router);
+  app.use('/api/v1/notifications', notificationsV1Router);
+  app.use('/api/v1/ai/master', aiMasterV1Router);
+  app.use('/api/v1/ai/actions', aiActionsV1Router);
+  app.use('/api/v1/ai/mutations', aiMutationsV1Router);
+  app.use('/api/v1/ai/emergency', aiEmergencyV1Router);
   app.use('/api/parse-statement', pdfParserRouter);
 
   app.use(notFoundHandler);
