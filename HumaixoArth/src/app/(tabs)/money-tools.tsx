@@ -1,15 +1,16 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { ArrowLeftRight, Banknote, RefreshCw, Wallet } from 'lucide-react-native';
 import { FinanceScreen } from '@/components/finance-screen';
 import { ToolCard, ToolSectionTitle } from '@/components/money-tools-ui';
 import { useFinanceColors } from '@/constants/finance-theme';
 
 const FEATURES = [
-  { route: '/budgets' as const, title: 'Budgets', description: 'Set category limits and keep spending on track.', icon: '◔' },
-  { route: '/transfers' as const, title: 'Internal transfers', description: 'Review account-to-account movements.', icon: '⇄' },
-  { route: '/recurring' as const, title: 'Recurring transactions', description: 'Confirm regular income and payments.', icon: '↻' },
-  { route: '/loans' as const, title: 'Loans & lending', description: 'Track outstanding balances and repayments.', icon: '₹' },
+  { route: '/budgets' as const, title: 'Budgets', description: 'Set category limits and keep spending on track.', Icon: Wallet },
+  { route: '/transfers' as const, title: 'Transfers', description: 'Review account-to-account movements.', Icon: ArrowLeftRight },
+  { route: '/recurring' as const, title: 'Recurring', description: 'Confirm regular income and payments.', Icon: RefreshCw },
+  { route: '/loans' as const, title: 'Loans', description: 'Track outstanding balances and repayments.', Icon: Banknote },
 ];
 
 export default function MoneyToolsScreen(): React.JSX.Element {
@@ -22,11 +23,27 @@ export default function MoneyToolsScreen(): React.JSX.Element {
         <TouchableOpacity key={feature.route} onPress={() => router.push(feature.route)} accessibilityRole="link">
           <ToolCard style={styles.featureCard}>
             <View style={[styles.iconBox, { backgroundColor: `${colors.primary}1b` }]}>
-              <Text style={[styles.icon, { color: colors.primarySoft }]}>{feature.icon}</Text>
+              <feature.Icon size={21} color={colors.primarySoft} strokeWidth={2.2} />
             </View>
             <View style={styles.featureCopy}>
               <Text style={[styles.featureTitle, { color: colors.text }]}>{feature.title}</Text>
               <Text style={[styles.featureDescription, { color: colors.muted }]}>{feature.description}</Text>
+            </View>
+            <Text style={[styles.chevron, { color: colors.subtle }]}>›</Text>
+          </ToolCard>
+        </TouchableOpacity>
+      ))}
+      <ToolSectionTitle>More to explore</ToolSectionTitle>
+      {([
+        { route: '/people', title: 'People', description: 'Review activity connected to people.' },
+        { route: '/insights', title: 'Insights', description: 'Explore spending patterns and trends.' },
+        { route: '/history', title: 'Balance history', description: 'See account balances over time.' },
+      ] as const).map((item) => (
+        <TouchableOpacity key={item.route} onPress={() => router.push(item.route)} accessibilityRole="link">
+          <ToolCard style={styles.secondaryCard}>
+            <View style={styles.featureCopy}>
+              <Text style={[styles.featureTitle, { color: colors.text }]}>{item.title}</Text>
+              <Text style={[styles.featureDescription, { color: colors.muted }]}>{item.description}</Text>
             </View>
             <Text style={[styles.chevron, { color: colors.subtle }]}>›</Text>
           </ToolCard>
@@ -38,8 +55,8 @@ export default function MoneyToolsScreen(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   featureCard: { flexDirection: 'row', alignItems: 'center', gap: 13 },
+  secondaryCard: { flexDirection: 'row', alignItems: 'center', gap: 13 },
   iconBox: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  icon: { fontSize: 22, fontWeight: '800' },
   featureCopy: { flex: 1, minWidth: 0, gap: 4 },
   featureTitle: { fontSize: 14, fontWeight: '800' },
   featureDescription: { fontSize: 11, lineHeight: 16 },

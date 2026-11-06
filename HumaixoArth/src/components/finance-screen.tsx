@@ -10,7 +10,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { useRouter, type Href } from 'expo-router';
+import { useRouter, useSegments, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FinanceTheme, useFinanceColors } from '@/constants/finance-theme';
@@ -48,6 +48,8 @@ export function FinanceScreen({
   scrollable = true,
 }: FinanceScreenProps): React.JSX.Element {
   const router = useRouter();
+  const segments = useSegments();
+  const isInMainTabs = segments[0] === '(tabs)';
   const colors = useFinanceColors();
   const themeMode = useThemeStore((state) => state.mode);
   const { width } = useWindowDimensions();
@@ -104,7 +106,7 @@ export function FinanceScreen({
               <View style={styles.logoMark}><Text style={styles.logoText}>H</Text></View>
               <Text style={[styles.brandName, { color: colors.text }]}>Humaixo <Text style={[styles.brandAccent, { color: colors.primarySoft }]}>Arth</Text></Text>
             </View>
-            {renderNavigation(true)}
+            {!isInMainTabs ? renderNavigation(true) : null}
             <View style={styles.sidebarFooter}>
               <Text style={[styles.sidebarFooterTitle, { color: colors.text }]}>Your money, clearly understood.</Text>
               <Text style={[styles.sidebarFooterText, { color: colors.subtle }]}>Private finance tools for everyday decisions.</Text>
@@ -164,7 +166,7 @@ export function FinanceScreen({
             </View>
           )}
 
-          {!isDesktop ? renderNavigation(false) : null}
+          {!isDesktop && !isInMainTabs ? renderNavigation(false) : null}
         </View>
       </View>
     </SafeAreaView>
