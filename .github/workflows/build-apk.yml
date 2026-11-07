@@ -25,13 +25,13 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
-        run: npm install
+        run: cd HumaixoArth && npm install
 
       - name: Build APK on EAS
-        run: eas build --platform android --profile preview --non-interactive
+        run: cd HumaixoArth && eas build --platform android --profile preview --non-interactive
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: android-apk
-          path: "*.apk"
+          path: "HumaixoArth/*.apk"
